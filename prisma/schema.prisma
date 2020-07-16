@@ -1,0 +1,75 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+model host {
+    description    String
+    id             Int             @default(autoincrement()) @id
+    name           String
+    owner_user_id  Int
+    site           String
+    host_members   host_member[]
+    overall_rating overall_rating?
+    user_ratings   user_rating[]
+}
+
+model server_info {
+    last_rating_update DateTime @unique
+}
+
+model host_member {
+    host_id Int
+    id      Int  @default(autoincrement()) @id
+    user_id Int
+    host    host @relation(fields: [host_id], references: [id])
+
+    @@index([host_id], name: "host_id")
+}
+
+model overall_rating {
+    billing Float?
+    cpu     Float?
+    general Float
+    host_id Int    @unique
+    ram     Float?
+    support Float?
+    host    host   @relation(fields: [host_id], references: [id])
+}
+
+model user_comment {
+    id          Int         @default(autoincrement()) @id
+    rating_id   Int
+    text        String
+    user_id     Int
+    user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
+
+    @@index([rating_id], name: "rating_id")
+}
+
+model user_rating {
+    rating_id     Int            @default(autoincrement()) @id
+    billing       Float?
+    cpu           Float?
+    general       Float
+    host_id       Int
+    ram           Float?
+    support       Float?
+    user_id       Int
+    host          host           @relation(fields: [host_id], references: [id])
+    user_comments user_comment[]
+    user_review   user_review?
+
+
+    @@index([host_id], name: "host_id")
+}
+
+model user_review {
+    rating_id   Int         @unique
+    text        String
+    user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
+}
