@@ -47,6 +47,7 @@ model user_comment {
     text        String
     user_id     Int
     user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
+    karma       Int         @default(0)
 
     @@index([rating_id], name: "rating_id")
 }
@@ -64,12 +65,12 @@ model user_rating {
     user_comments user_comment[]
     user_review   user_review?
 
-
     @@index([host_id], name: "host_id")
 }
 
 model user_review {
     rating_id   Int         @unique
     text        String
+    karma       Int         @default(0)
     user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
 }
