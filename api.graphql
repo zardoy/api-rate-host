@@ -103,7 +103,7 @@ type Query {
     """Returns the first n elements from the list."""
     first: Int!
     hostId: Int!
-  ): userReviewsConnectionConnection
+  ): user_review_nodeConnection
 }
 
 type user_rating {
@@ -111,22 +111,18 @@ type user_rating {
   numberOfComments: Int!
 }
 
-type user_review {
-  rating: user_rating!
+type user_review_node {
+  karma: Int!
+  rating_id: Int!
   text: String!
+  user_rating: Int!
 }
 
-type userReviewsConnection {
-  after: Int
-  hasMore: Boolean!
-  nodes: [user_review!]!
-}
-
-type userReviewsConnectionConnection {
+type user_review_nodeConnection {
   """
   https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
   """
-  edges: [userReviewsConnectionEdge]
+  edges: [user_review_nodeEdge]
 
   """
   https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
@@ -134,12 +130,12 @@ type userReviewsConnectionConnection {
   pageInfo: PageInfo!
 }
 
-type userReviewsConnectionEdge {
+type user_review_nodeEdge {
   """https://facebook.github.io/relay/graphql/connections.htm#sec-Cursor"""
   cursor: String!
 
   """https://facebook.github.io/relay/graphql/connections.htm#sec-Node"""
-  node: userReviewsConnection
+  node: user_review_node
 }
 
 enum UserRole {
