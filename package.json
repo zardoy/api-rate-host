@@ -25,6 +25,7 @@
     },
     "scripts": {
         "start": "nexus dev",
-        "test": "jest"
+        "test": "jest",
+        "postinstall": "npx prisma generate"
     }
 }
