@@ -19,8 +19,8 @@ model Host {
 }
 
 model DeletedHost {
-    id         Int      @id
-    deleteTime DateTime @default(now())
+    id        Int      @id
+    deletedAt DateTime @default(now())
 }
 
 // deprecated
@@ -50,7 +50,8 @@ model OverallRating {
 model UserComment {
     commentId        Int               @default(autoincrement()) @id
     ratingId         Int
-    createTime       DateTime          @default(now())
+    createdAt        DateTime          @default(now())
+    updatedAt        DateTime?
     text             String
     toCommentId      Int?
     userId           Int
@@ -103,7 +104,8 @@ model UserReview {
     ratingId   Int        @unique
     text       String
     karma      Int        @default(0)
-    createTime DateTime   @default(now())
+    createdAt  DateTime   @default(now())
+    updatedAt  DateTime?
     userRating UserRating @relation(fields: [ratingId], references: [ratingId])
 }
 
