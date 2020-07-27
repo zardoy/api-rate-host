@@ -26,6 +26,7 @@
     "scripts": {
         "start": "nexus dev",
         "test": "jest",
-        "postinstall": "npx prisma generate"
+        "postinstall": "npx prisma generate",
+        "local-mysql": "docker run --name mysql --rm --publish 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:5.7"
     }
 }
