@@ -47,22 +47,6 @@ model OverallRating {
     host    Host   @relation(fields: [hostId], references: [id])
 }
 
-model UserComment {
-    commentId        Int               @default(autoincrement()) @id
-    ratingId         Int
-    createdAt        DateTime          @default(now())
-    updatedAt        DateTime?
-    text             String
-    toCommentId      Int?
-    userId           Int
-    userFullName     String
-    userRating       UserRating        @relation(fields: [ratingId], references: [ratingId])
-    karma            Int               @default(0)
-    userVoteComments UserVoteComment[]
-
-    @@index([ratingId], name: "ratingId")
-}
-
 model UserRating {
     ratingId     Int               @default(autoincrement()) @id
     general      Float
@@ -79,6 +63,32 @@ model UserRating {
 
     @@index([hostId], name: "hostId")
     @@unique([hostId, userId], name: "host_id_user_id_unique")
+}
+
+model UserReview {
+    ratingId     Int        @unique
+    text         String
+    karma        Int        @default(0)
+    userFullName String
+    createdAt    DateTime   @default(now())
+    updatedAt    DateTime?
+    userRating   UserRating @relation(fields: [ratingId], references: [ratingId])
+}
+
+model UserComment {
+    commentId        Int               @default(autoincrement()) @id
+    ratingId         Int
+    createdAt        DateTime          @default(now())
+    updatedAt        DateTime?
+    text             String
+    toCommentId      Int?
+    userId           Int
+    userFullName     String
+    userRating       UserRating        @relation(fields: [ratingId], references: [ratingId])
+    karma            Int               @default(0)
+    userVoteComments UserVoteComment[]
+
+    @@index([ratingId], name: "ratingId")
 }
 
 model UserVoteRatings {
@@ -99,16 +109,6 @@ model UserVoteComment {
 
     @@index([commentId], name: "commentId")
     @@unique([commentId, userId], name: "comment_id_user_id_unique")
-}
-
-model UserReview {
-    ratingId     Int        @unique
-    text         String
-    karma        Int        @default(0)
-    userFullName String
-    createdAt    DateTime   @default(now())
-    updatedAt    DateTime?
-    userRating   UserRating @relation(fields: [ratingId], references: [ratingId])
 }
 
 enum VoteType {
