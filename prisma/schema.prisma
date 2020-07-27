@@ -66,13 +66,13 @@ model UserRating {
 }
 
 model UserReview {
-    ratingId     Int        @unique
-    text         String
-    karma        Int        @default(0)
-    userFullName String
-    createdAt    DateTime   @default(now())
-    updatedAt    DateTime?
-    userRating   UserRating @relation(fields: [ratingId], references: [ratingId])
+    ratingId   Int        @unique
+    text       String
+    karma      Int        @default(0)
+    // userFullName String
+    createdAt  DateTime   @default(now())
+    updatedAt  DateTime?
+    userRating UserRating @relation(fields: [ratingId], references: [ratingId])
 }
 
 model UserComment {
@@ -83,7 +83,7 @@ model UserComment {
     text             String
     toCommentId      Int?
     userId           Int
-    userFullName     String
+    // userFullName     String
     userRating       UserRating        @relation(fields: [ratingId], references: [ratingId])
     karma            Int               @default(0)
     userVoteComments UserVoteComment[]
