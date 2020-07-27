@@ -2,6 +2,25 @@
 ### Do not make changes to this file directly
 
 
+enum AnswerTo {
+  COMMENT
+  REVIEW
+}
+
+type componentRating {
+  billing: Float
+  cpu: Float
+  ram: Float
+  support: Float
+}
+
+input ComponentRatings {
+  billing: Int!
+  cpu: Int!
+  ram: Int!
+  support: Int!
+}
+
 """
 A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the
 `date-time` format outlined in section 5.6 of the RFC 3339 profile of the ISO
@@ -9,32 +28,23 @@ A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the
 """
 scalar DateTime
 
-type host_member {
-  host_id: Int!
-  user_id: Int!
-}
-
-input host_memberWhereUniqueInput {
-  host_id: Int
-  id: Int
-}
-
-type hostDetails {
+type Host {
+  componentRating: componentRating!
   description: String!
-}
-
-type hostListConnection {
-  after: Int
-  hasMore: Boolean!
-  nodes: [hostListItem!]!
-  totalCount: Int!
-}
-
-type hostListItem {
-  average_rating: Float
+  generalRating: Float!
   id: Int!
   name: String!
   site: String!
+}
+
+type HostsCustomPagination {
+  edges: [Host!]!
+  hasNext: Boolean!
+  totalCount: Int!
+}
+
+input HostWhereUniqueInput {
+  id: Int
 }
 
 """
@@ -49,97 +59,77 @@ type Me {
 }
 
 type Mutation {
-  addMember(user_id: Int!): Boolean
-  removeMember(user_id: Int!): Boolean
-}
+  addMember(userId: Int!): Boolean
+  createOrUpdateRating(
+    componentRatings: ComponentRatings
 
-type overall_rating {
-  billing: Float
-  cpu: Float
-  ram: Float
-  support: Float
-}
-
-"""
-PageInfo cursor, as defined in https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
-"""
-type PageInfo {
-  """
-  The cursor corresponding to the last nodes in edges. Null if the connection is empty.
-  """
-  endCursor: String
-
-  """
-  Used to indicate whether more edges exist following the set defined by the clients arguments.
-  """
-  hasNextPage: Boolean!
-
-  """
-  Used to indicate whether more edges exist prior to the set defined by the clients arguments.
-  """
-  hasPreviousPage: Boolean!
-
-  """
-  The cursor corresponding to the first nodes in edges. Null if the connection is empty.
-  """
-  startCursor: String
+    """All ratings must be in range 1-10 inclusive"""
+    generalRating: Int
+    hostId: Int!
+  ): UserRatingId!
+  createOrUpdateReview(hostId: Int!, text: String!): Boolean!
+  deleteRating(hostId: Int!): Boolean!
+  deleteReview(hostId: Int!): Boolean!
+  removeMember(userId: Int!): Boolean
 }
 
 type Query {
-  hostDetails(hostId: Int!): hostDetails
-  hostMembers(after: host_memberWhereUniqueInput, before: host_memberWhereUniqueInput, first: Int, last: Int): [host_member!]!
-  hosts_rating(
-    """Aka cursor"""
-    after: Int
+  host(where: HostWhereUniqueInput!): Host
 
-    """20 by default"""
-    pageSize: Int
-  ): hostListConnection!
-  me: Me
-  reviews(
-    """Returns the elements in the list that come after the specified cursor"""
-    after: String
-
-    """Returns the first n elements from the list."""
+  """List of user ids. Only for HOST_OWNER role!"""
+  hostMembers: [String!]
+  hosts(
+    """ZERO based"""
     first: Int!
-    hostId: Int!
-  ): user_review_nodeConnection
+    offset: Int!
+    search: String
+  ): HostsCustomPagination!
+  me: Me
+  reviews(first: Int!, offset: Int!, search: String): ReviewsCustomPagination!
 }
 
-type user_rating {
-  general_rating: Float!
-  numberOfComments: Int!
+type ReviewsCustomPagination {
+  edges: [UserReview!]!
+  hasNext: Boolean!
+  totalCount: Int!
 }
 
-type user_review_node {
+type UserComment {
+  commentId: Int!
   karma: Int!
-  rating_id: Int!
   text: String!
-  user_rating: Int!
 }
 
-type user_review_nodeConnection {
-  """
-  https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
-  """
-  edges: [user_review_nodeEdge]
-
-  """
-  https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
-  """
-  pageInfo: PageInfo!
+type UserCommentsCustomPagination {
+  edges: [UserComment!]!
+  hasNext: Boolean!
+  totalCount: Int!
 }
 
-type user_review_nodeEdge {
-  """https://facebook.github.io/relay/graphql/connections.htm#sec-Cursor"""
-  cursor: String!
+type UserData {
+  fullName: String
+  id: ID
+}
 
-  """https://facebook.github.io/relay/graphql/connections.htm#sec-Node"""
-  node: user_review_node
+type UserRatingId {
+  ratingId: Int!
+}
+
+type UserReview {
+  generalRating: Int!
+  karma: Int!
+  myVote: VoteType
+  ratingId: Int!
+  text: String!
 }
 
 enum UserRole {
   HOST_MEMBER
   HOST_OWNER
   USER
+}
+
+enum VoteType {
+  DOWN
+  UP
 }

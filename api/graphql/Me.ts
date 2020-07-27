@@ -19,13 +19,9 @@ schema.enumType({
 
 export const getOwnerHost = async (user_id: number, prisma: NexusContext["db"]) => {
     let ownerHosts = await prisma.host.findMany({
-        where: { owner_user_id: user_id }
+        where: { ownerUserId: user_id }
     });
-    if (ownerHosts.length > 0) {
-        return ownerHosts[0];
-    } else {
-        return null;
-    }
+    return ownerHosts[0] || null;
 };
 
 schema.extendType({
@@ -43,8 +39,8 @@ schema.extendType({
                         host: ownerHost.id
                     };
                 } else {
-                    let memberHosts = await prisma.host_member.findMany({
-                        where: { user_id: +user_id },
+                    let memberHosts = await prisma.hostMember.findMany({
+                        where: { userId: +user_id },
                         include: {
                             host: true
                         }
@@ -52,7 +48,7 @@ schema.extendType({
                     if (memberHosts.length > 0) {
                         return {
                             role: "HOST_MEMBER",
-                            host: memberHosts[0].host.id
+                            host: memberHosts[0].hostId
                         };
                     } else {
                         return {

@@ -1,47 +1,61 @@
-import { schema, settings } from "nexus";
-
-import { forwardConnectionArgs, connectionArgs, connectionFromArray } from "graphql-relay";
-import { connectionPlugin } from "@nexus/schema";
-
-// settings.change({
-//     schema: {
-//         connections: {
-//             default: {
-//                 disableBackwardPagination: true,
-//                 extendConnection: {
-//                     totalCount: { type: "Int", nullable: false, description: "Total amount of results" }
-//                 },
-//             }
-//         }
-//     }
-// });
+import { schema } from "nexus";
 
 schema.objectType({
-    name: "user_rating",
+    name: "UserReview",
     definition(t) {
-        t.model.general({
-            alias: "general_rating"
-        });
-        t.int("numberOfComments", {
+        t.model.ratingId();
+        t.model.text();
+        t.model.karma();
+        t.field("generalRating", {
+            type: "Int",
             nullable: false,
-            async resolve(user_rating, _args, { db: prisma }) {
-                return await prisma.user_comment.count({
+            async resolve({ ratingId }, _args, { db: prisma }) {
+                return (await prisma.userRating.findOne({
+                    where: { ratingId },
+                    select: { general: true }
+                }))!.general;
+            }
+        });
+        t.field("myVote", {
+            type: "VoteType",
+            async resolve({ ratingId }, _args, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth");
+                let myVote = await prisma.userVoteRatings.findOne({
                     where: {
-                        rating_id: user_rating.rating_id
-                    }
+                        rating_id_user_id_unique: {
+                            ratingId,
+                            userId: +vk_params.user_id
+                        }
+                    },
                 });
+                return myVote && myVote.isDislike ? "DOWN" : "UP";
             }
         });
     }
 });
 
+schema.enumType({
+    name: "VoteType",
+    members: [
+        "UP",
+        "DOWN"
+    ]
+});
+
 schema.objectType({
-    name: "user_review_node",
+    name: "ReviewsCustomPagination",
     definition(t) {
-        t.model("user_review").rating_id();
-        t.model("user_review").text();
-        t.model("user_review").karma();
-        t.int("user_rating", {
+        t.field("edges", {
+            type: "UserReview",
+            list: true,
+            nullable: false
+        });
+        t.field("hasNext", {
+            type: "Boolean",
+            nullable: false
+        });
+        t.field("totalCount", {
+            type: "Int",
             nullable: false
         });
     }
@@ -50,94 +64,124 @@ schema.objectType({
 schema.extendType({
     type: "Query",
     definition(t) {
-        t.connection("reviews", {
-            type: "user_review_node",
-            additionalArgs: {
-                hostId: schema.intArg({ required: true })
+        t.field("reviews", {
+            type: "ReviewsCustomPagination",
+            nullable: false,
+            args: {
+                offset: schema.intArg({ required: true }),
+                first: schema.intArg({ required: true }),
+                search: schema.stringArg(),
             },
-            //todo what is default func
-            cursorFromNode: (node) => `cursor:${node!.rating_id}`,
-            disableBackwardPagination: true,
-            async nodes(_root, { hostId }, { db: prisma }) {
-                connectionPlugin.defaultCursorFromNode;
-                const allHostReviews = (await prisma.user_review.findMany({
-                    where: {
-                        user_rating: {
-                            host_id: hostId
-                        },
-                    },
+            async resolve(_root, { first, offset, search: searchString }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not authorized");
+                let allReviews = (await prisma.userReview.findMany({
+                    where: searchString ? {
+                        text: {
+                            contains: searchString
+                        }
+                    } : undefined,
                     orderBy: {
                         karma: "desc"
                     },
-                    // cursor: {
-                    //     rating_id: +(paginationArgs.after || 0)
-                    // },
-                    // take: paginationArgs.first,
                     include: {
-                        user_rating: {
-                            select: {
-                                general: true
-                            }
+                        userRating: {
+                            include: {
+                                userVotes: true
+                            },
                         }
                     }
                 }))
-                    .map(({ user_rating, ...restHostReview }) => ({
-                        ...restHostReview,
-                        user_rating: user_rating.general,
-                        cursor: restHostReview.rating_id
-                    }));
-                console.dir(connectionFromArray(allHostReviews, {}), {
-                    depth: null
-                });
-                return allHostReviews;
+                    .map(review => {
+                        let myVote = review.userRating.userVotes.find(vote => vote.userId === +vk_params.user_id);
+                        return {
+                            ...review,
+                            generalRating: review.userRating.general,
+                            myVote: myVote && myVote.isDislike ? "DOWN" : "UP"
+                        };
+                    });
+                let end = first + offset;
+                return {
+                    edges: allReviews.slice(offset, end),
+                    hasNext: !!allReviews[end],
+                    totalCount: allReviews.length
+                };
             }
-            // resolve(_root, { hostId, ...paginationArgs }, { db: prisma }) {
-            //     // const allHostReviews = (await prisma.user_review.findMany({
-            //     //     where: {
-            //     //         user_rating: {
-            //     //             host_id: hostId
-            //     //         },
-            //     //     },
-            //     //     orderBy: {
-            //     //         karma: "desc"
-            //     //     },
-            //     //     // cursor: {
-            //     //     //     rating_id: +(paginationArgs.after || 0)
-            //     //     // },
-            //     //     // take: paginationArgs.first,
-            //     //     include: {
-            //     //         user_rating: {
-            //     //             select: {
-            //     //                 general: true
-            //     //             }
-            //     //         }
-            //     //     }
-            //     // }))
-            //     //     .map(({ user_rating, ...restHostReview }) => ({
-            //     //         ...restHostReview,
-            //     //         user_rating: user_rating.general
-            //     //     }));
-            //     // let paginated = connectionFromArray(allHostReviews, paginationArgs);
-            //     //todo :(
-            //     return {
-            //         edges: [
-            //             {
-            //                 cursor: 'YXJyYXljb25uZWN0aW9uOjA=',
-            //                 node: { rating_id: 2, text: 'Poor hosting', karma: 5, user_rating: 0 }
-            //             },
-            //             {
-            //                 cursor: 'YXJyYXljb25uZWN0aW9uOjE=',
-            //                 node: { rating_id: 1, text: 'Nice hosting', karma: 0, user_rating: 9 }
-            //             }
-            //         ],
-            //         pageInfo: {
-            //             startCursor: 'YXJyYXljb25uZWN0aW9uOjA=',
-            //             endCursor: 'YXJyYXljb25uZWN0aW9uOjE=',
-            //             hasPreviousPage: false,
-            //             hasNextPage: false
-            //         }
-            //     };
-            // }
+        });
+    }
+});
+
+schema.extendType({
+    type: "Mutation",
+    definition(t) {
+        t.field("createOrUpdateReview", {
+            type: "Boolean",
+            nullable: false,
+            args: {
+                hostId: schema.intArg({ required: true }),
+                text: schema.stringArg({ required: true }),
+            },
+            async resolve(_root, { hostId, text }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth");
+                let userId = +vk_params.user_id;
+                let dedicatedRating = await prisma.userRating.findOne({
+                    where: {
+                        host_id_user_id_unique: {
+                            hostId,
+                            userId
+                        }
+                    },
+                    select: {
+                        ratingId: true
+                    }
+                });
+                if (!dedicatedRating) throw new Error("Dedicated rating can't be found. You need to rate this host first.");
+                //todo: test connect
+                await prisma.userReview.upsert({
+                    where: {
+                        ratingId: dedicatedRating.ratingId
+                    },
+                    create: {
+                        text,
+                        userRating: {
+                            connect: {
+                                ratingId: dedicatedRating.ratingId
+                            }
+                        }
+                    },
+                    update: {
+                        text
+                    }
+                });
+                return true;
+            }
+        });
+        t.field("deleteReview", {
+            type: "Boolean",
+            nullable: false,
+            args: {
+                hostId: schema.intArg({ required: true }),
+            },
+            async resolve(_root, { hostId }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not authorized");
+                let dedicatedRating = await prisma.userRating.findOne({
+                    where: {
+                        host_id_user_id_unique: {
+                            hostId,
+                            userId: +vk_params.user_id
+                        }
+                    },
+                    select: {
+                        ratingId: true
+                    }
+                });
+                if (!dedicatedRating) throw new Error("Dedicated rating not found");
+                await prisma.userReview.delete({
+                    where: {
+                        ratingId: dedicatedRating.ratingId
+                    }
+                });
+                return true;
+            }
         });
     }
 });

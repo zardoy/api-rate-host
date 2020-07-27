@@ -1,46 +1,53 @@
 import { schema } from "nexus";
 
 schema.objectType({
+    name: "UserData",
+    definition(t) {
+        t.field("fullName", { type: "String", nullable: false });
+        t.field("id", { type: "ID", nullable: false });
+    }
+});
+
+schema.objectType({
+    name: "UserDataWithHoster",
+    definition(t) {
+        t.field("fullName", { type: "String", nullable: false });
+        t.field("id", { type: "ID", nullable: false });
+        t.field("isFromHoster", { type: "Boolean", nullable: false });
+    }
+});
+
+schema.objectType({
     name: "UserComment",
     definition(t) {
         t.model.commentId();
         t.model.karma();
-        t.field("text", {
-            type: "String",
-            args: {
-                includeMention: schema.booleanArg({ required: false, description: "true by default" })
-            },
-            async resolve(comment, { includeMention }, { db: prisma }) {
-                return includeMention === false || comment.toCommentId === null ?
-                    comment.text :
-                    (await prisma.userComment.findOne({
-                        where: { commentId: comment.toCommentId }
-                    }))?.userId;
-            }
+        t.model.text();
+        t.model.commentId();
+        //todo: refactor: tree comments, like on reddit
+        t.field("commentResponseUser", {
+            type: "UserData",
+            nullable: true
         });
-        t.field("answerTo", {
-            type: "AnswerTo",
-            nullable: false,
-            resolve: ({ toCommentId }) => toCommentId === null ? "REVIEW" : "COMMENT"
-        });
-        t.field("isFromHoster", {
-            type: "Boolean",
+        t.model.createdAt();
+        t.model.updatedAt();
+        t.field("author", {
+            type: "UserData",
             nullable: false
         });
         t.field("myVote", {
             type: "VoteType",
             nullable: true,
-            async resolve({ userId, commentId }, _args, { db: prisma, vk_params }) {
-                if (!vk_params) throw new Error("Not authorized");
-                if (userId !== +vk_params.user_id) return null;
-                let userCommentVote = await prisma.userVoteComment.findOne({
-                    where: { comment_id_user_id_unique: { commentId, userId } }
-                });
-                if (!userCommentVote) return null;
-                userCommentVote.
-            }
+            // async resolve({ userId, commentId }, _args, { db: prisma, vk_params }) {
+            //     if (!vk_params) throw new Error("Not authorized");
+            //     if (userId !== +vk_params.user_id) return null;
+            //     let userCommentVote = await prisma.userVoteComment.findOne({
+            //         where: { comment_id_user_id_unique: { commentId, userId } }
+            //     });
+            //     if (!userCommentVote) return null;
+            //     userCommentVote.
+            // }
         });
-        // t.field("host")
     }
 });
 
@@ -79,12 +86,12 @@ schema.extendType({
             args: {
                 offset: schema.intArg({ required: true }),
                 first: schema.intArg({ required: true }),
-                search: schema.stringArg(),
+                searchQuery: schema.stringArg(),
             },
-            async resolve(_root, { offset, first, search: searchString }, { db: prisma }) {
+            async resolve(_root, { offset, first, searchQuery }, { db: prisma }) {
                 let allComments = (await prisma.userComment.findMany({
-                    where: searchString ? {
-                        text: { contains: searchString }
+                    where: searchQuery ? {
+                        text: { contains: searchQuery }
                     } : undefined,
                     include: {
                         userVoteComments: true

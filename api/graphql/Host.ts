@@ -1,171 +1,161 @@
 import { schema } from "nexus";
 import _ from "lodash";
-import { paginateResults } from "./util";
 
-const MAX_RATING = 10;
+const MAX_RATING = 10, MIN_RATING = 1, NO_RATINGS_RATING = 0;
 
-// schema.objectType({
-//     name: "Host",
-//     definition(t) {
-//         t.int("id");
-//         t.string("title");
-//         t.string("body");
-//         t.boolean("published");
-//     }
-// });
+/** @returns number 0 or float 1-10 inclusive */
+export const calculateRating = (numbersArr: number[], hostId: number) => {
+    numbersArr = numbersArr.map(rating => rating + 1);
+    let rating = _.ceil(_.mean(numbersArr), 1);
+    if (!_.inRange(MIN_RATING, MAX_RATING + 1)) throw new RangeError(`Calculated rating ${rating} out of range. Host id: ${hostId}`);
+    return isFinite(rating) ? rating : NO_RATINGS_RATING;
+};
 
 schema.objectType({
-    name: "overall_rating",
+    name: "Host",
     definition(t) {
-        t.model.cpu();
-        t.model.ram();
-        t.model.support();
-        t.model.billing();
+        t.model.id();
+        t.model.name();
+        t.model.description();
+        t.model.site();
+        t.field("generalRating", {
+            type: "Float",
+            nullable: false,
+            async resolve({ id: hostId }, _args, ctx) {
+                let userRatings = await ctx.db.userRating.findMany({
+                    where: {
+                        hostId
+                    },
+                    select: {
+                        general: true
+                    }
+                });
+                return calculateRating(userRatings.reduce((prevArr, { general: generalRating }) => [...prevArr, generalRating], [] as number[]), hostId);
+            }
+        });
+        t.field("componentRating", {
+            type: "componentRating",
+            nullable: false,
+            async resolve({ id: hostId }, _args, { db: prisma }) {
+                let hostRatingsFromDb = await prisma.userRating.findMany({
+                    where: {
+                        hostId
+                    },
+                    select: {
+                        billing: true,
+                        cpu: true,
+                        ram: true,
+                        support: true
+                    }
+                });
+                //todo: find better solution
+                const firstEntry = hostRatingsFromDb[0];
+                if (!firstEntry) return {
+                    billing: 0,
+                    cpu: 0,
+                    ram: 0,
+                    support: 0
+                };
+                let ratingArrsNullable = hostRatingsFromDb.reduce((prevRatingArr, currentRating) => {
+                    return _.mapValues(prevRatingArr, (arr, key) => [...arr, currentRating[key as keyof typeof prevRatingArr]]);
+                }, _.mapValues(firstEntry, val => [val]));
+                let ratings = _.mapValues(ratingArrsNullable, arr => calculateRating(_.compact(arr), hostId));
+                return ratings;
+            }
+        });
     }
 });
 
 schema.objectType({
-    name: "hostDetails",
+    name: "componentRating",
     definition(t) {
-        t.model("host").description();
-        // t.field("host_rating", {
-        //     type: "Float",
-        //     nullable: false,
-        //     async resolve({ id: hostId }, _args, ctx) {
-        //         let user_ratings = await ctx.db.user_rating.findMany({
-        //             where: {
-        //                 host_id: hostId
-        //             }
-        //         });
-        //         let hostRating = _.meanBy(user_ratings, rating => rating.general);
-        //         if (hostRating > MAX_RATING) throw new Error(`Rating out of range. Host id: ${hostId}. Calculated rating: ${hostRating}`);
-        //         return hostRating;
-        //     }
-        // });
+        //todo: switch back OverallRating
+        t.model("OverallRating").billing();
+        t.model("OverallRating").cpu();
+        t.model("OverallRating").ram();
+        t.model("OverallRating").support();
     }
 });
 
 schema.objectType({
-    name: "hostListItem",
+    name: "HostsCustomPagination",
     definition(t) {
-        t.model("host").id();
-        t.model("host").name();
-        t.model("host").site();
-        t.float("average_rating");
-    }
-});
-
-schema.objectType({
-    name: "host_member",
-    definition(t) {
-        t.model.host_id();
-        t.model.user_id();
-    }
-});
-
-schema.objectType({
-    name: "hostListConnection",
-    definition(t) {
-        t.int("totalCount", { nullable: false });
-        t.boolean("hasMore", { nullable: false });
-        t.int("after");
-        t.field("nodes", {
-            type: "hostListItem",
+        t.field("edges", {
+            type: "Host",
             list: true,
+            nullable: false
+        });
+        t.field("hasNext", {
+            type: "Boolean",
+            nullable: false
+        });
+        t.field("totalCount", {
+            type: "Int",
             nullable: false
         });
     }
 });
 
-const DEFAULT_PAGINATION_LIMIT = 20;
-
-const connectionArgs = {
-    after: schema.intArg({ description: "Aka cursor" }),
-    pageSize: schema.intArg({ description: `${DEFAULT_PAGINATION_LIMIT} by default` }),
-};
-
 schema.extendType({
     type: "Query",
     definition(t) {
-        //todo
-        //t.connection("hosts_rating")
-        t.field("hosts_rating", {
-            type: "hostListConnection",
+        t.crud.host();
+        //t.crud.hosts(); - can't explicity set the ordering
+        t.field("hosts", {
+            //todo: return whether should update rating
+            type: "HostsCustomPagination",
             nullable: false,
-            args: connectionArgs,
-            async resolve(_root, { after, pageSize }, { db: prisma }) {
-                if (!pageSize) pageSize = DEFAULT_PAGINATION_LIMIT;
-                if (after === null) after = undefined;
-                const allHosts = await prisma.host.findMany({
+            args: {
+                offset: schema.intArg({ nullable: false }),
+                first: schema.intArg({ nullable: false, description: "ZERO based" }),
+                search: schema.stringArg()
+            },
+            async resolve(_root, { first, offset, search: searchString }, { db: prisma }) {
+                const ratingList = (await prisma.host.findMany({
+                    where: searchString ? {
+                        OR: [
+                            {
+                                name: {
+                                    contains: searchString
+                                }
+                            },
+                            {
+                                description: {
+                                    contains: searchString
+                                }
+                            },
+                            {
+                                site: {
+                                    contains: searchString
+                                }
+                            }
+                        ]
+                    } : undefined,
                     include: {
-                        user_ratings: true
+                        userRatings: true
                     }
-                });
-                const ratingList = allHosts
+                }))
                     .map(host => ({
                         ...host,
-                        average_rating: _.meanBy(host.user_ratings, user_rating => user_rating.general + 1)
+                        averageRating:
+                            calculateRating(
+                                _.compact(
+                                    host.userRatings.reduce((ratingsArr, { general: generalRating }) => {
+                                        return [...ratingsArr, generalRating];
+                                    }, [] as number[])
+                                ),
+                                host.id
+                            )
                     }))
                     //DESC
-                    .sort((hostA, hostB) => hostB.average_rating - hostA.average_rating);
-                let paginatedRating = paginateResults({
-                    after,
-                    pageSize,
-                    results: ratingList,
-                    cursorKey: "id"
-                });
-                let newCursor = (paginatedRating.slice(-1)[0] || { id: null }).id;
+                    .sort((hostA, hostB) => hostB.averageRating - hostA.averageRating);
+                let end = offset + first;
                 return {
-                    after: newCursor,
-                    hasMore: !!ratingList.length && newCursor !== ratingList.slice(-1)[0].id,
-                    nodes: paginatedRating,
+                    edges: ratingList.slice(offset, end),
+                    hasNext: !!ratingList[end],
                     totalCount: ratingList.length
                 };
             }
         });
-        t.field("hostDetails", {
-            type: "hostDetails",
-            args: {
-                hostId: schema.intArg({ required: true })
-            },
-            async resolve(_root, { hostId }, { db: prisma }) {
-                return (await prisma.host.findMany({ where: { id: +hostId } }))[0] || null;
-            }
-        });
     }
 });
-
-
-// schema.extendType({
-//     type: "Mutation",
-//     definition(t) {
-//         t.field("createDraft", {
-//             type: "Post",
-//             args: {
-//                 title: schema.stringArg({ required: true }),
-//                 body: schema.stringArg({ required: true })
-//             },
-//             resolve(_root, { body, title }, ctx) {
-//                 ctx.db.posts.push({
-//                     id: ctx.db.posts.length + 1,
-//                     title,
-//                     body,
-//                     published: false
-//                 });
-//                 return ctx.db.posts.slice(-1)[0];
-//             }
-//         });
-//         t.field("publish", {
-//             type: "Post",
-//             args: {
-//                 id: schema.intArg({ nullable: false })
-//             },
-//             resolve(_root, { id }, ctx) {
-//                 let postIndex = ctx.db.posts.findIndex(post => post.id === id);
-//                 if (postIndex < 0) throw new Error(`Can't find post with id ${id}`);
-//                 ctx.db.posts[postIndex].published = true;
-//                 return ctx.db.posts[postIndex];
-//             }
-//         });
-//     }
-// });
