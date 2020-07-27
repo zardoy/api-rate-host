@@ -7,70 +7,107 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model host {
-    description    String
-    id             Int             @default(autoincrement()) @id
-    name           String
-    owner_user_id  Int
-    site           String
-    host_members   host_member[]
-    overall_rating overall_rating?
-    user_ratings   user_rating[]
+model Host {
+    description   String
+    id            Int            @default(autoincrement()) @id
+    name          String
+    ownerUserId   Int
+    site          String
+    hostMembers   HostMember[]
+    overallRating OverallRating?
+    userRatings   UserRating[]
 }
 
-model server_info {
-    last_rating_update DateTime @unique
+model DeletedHost {
+    id         Int      @id
+    deleteTime DateTime @default(now())
 }
 
-model host_member {
-    host_id Int
-    id      Int  @default(autoincrement()) @id
-    user_id Int
-    host    host @relation(fields: [host_id], references: [id])
-
-    @@index([host_id], name: "host_id")
+// deprecated
+model ServerInfo {
+    lastRatingUpdate DateTime @unique
 }
 
-model overall_rating {
+model HostMember {
+    hostId Int
+    userId Int
+    host   Host @relation(fields: [hostId], references: [id])
+
+    @@index([hostId], name: "hostId")
+    @@unique([hostId, userId], name: "host_id_user_id_unique")
+}
+
+model OverallRating {
     billing Float?
     cpu     Float?
     general Float
-    host_id Int    @unique
+    hostId  Int    @unique
     ram     Float?
     support Float?
-    host    host   @relation(fields: [host_id], references: [id])
+    host    Host   @relation(fields: [hostId], references: [id])
 }
 
-model user_comment {
-    id          Int         @default(autoincrement()) @id
-    rating_id   Int
-    text        String
-    user_id     Int
-    user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
-    karma       Int         @default(0)
+model UserComment {
+    commentId        Int               @default(autoincrement()) @id
+    ratingId         Int
+    createTime       DateTime          @default(now())
+    text             String
+    toCommentId      Int?
+    userId           Int
+    userRating       UserRating        @relation(fields: [ratingId], references: [ratingId])
+    karma            Int               @default(0)
+    userVoteComments UserVoteComment[]
 
-    @@index([rating_id], name: "rating_id")
+    @@index([ratingId], name: "ratingId")
 }
 
-model user_rating {
-    rating_id     Int            @default(autoincrement()) @id
-    billing       Float?
-    cpu           Float?
-    general       Float
-    host_id       Int
-    ram           Float?
-    support       Float?
-    user_id       Int
-    host          host           @relation(fields: [host_id], references: [id])
-    user_comments user_comment[]
-    user_review   user_review?
+model UserRating {
+    ratingId     Int               @default(autoincrement()) @id
+    general      Float
+    billing      Float?
+    cpu          Float?
+    ram          Float?
+    support      Float?
+    hostId       Int
+    userId       Int
+    host         Host              @relation(fields: [hostId], references: [id])
+    userComments UserComment[]
+    userReview   UserReview?
+    userVotes    UserVoteRatings[]
 
-    @@index([host_id], name: "host_id")
+    @@index([hostId], name: "hostId")
+    @@unique([hostId, userId], name: "host_id_user_id_unique")
 }
 
-model user_review {
-    rating_id   Int         @unique
-    text        String
-    karma       Int         @default(0)
-    user_rating user_rating @relation(fields: [rating_id], references: [rating_id])
+model UserVoteRatings {
+    ratingId   Int
+    userId     Int
+    voteType   VoteType
+    userRating UserRating @relation(fields: [ratingId], references: [ratingId])
+
+    @@index([ratingId], name: "ratingId")
+    @@unique([ratingId, userId], name: "rating_id_user_id_unique")
+}
+
+model UserVoteComment {
+    commentId    Int
+    userId       Int
+    voteType     VoteType
+    userComments UserComment @relation(fields: [commentId], references: [commentId])
+
+    @@index([commentId], name: "commentId")
+    @@unique([commentId, userId], name: "comment_id_user_id_unique")
+}
+
+model UserReview {
+    ratingId   Int        @unique
+    text       String
+    karma      Int        @default(0)
+    createTime DateTime   @default(now())
+    userRating UserRating @relation(fields: [ratingId], references: [ratingId])
+}
+
+enum VoteType {
+    UPVOTE
+    DOWNVOTE
 }
