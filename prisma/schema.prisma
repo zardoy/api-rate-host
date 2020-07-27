@@ -112,6 +112,6 @@ model UserVoteComment {
 }
 
 enum VoteType {
-    UPVOTE
-    DOWNVOTE
+    UP
+    DOWN
 }
