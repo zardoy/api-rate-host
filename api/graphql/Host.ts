@@ -108,25 +108,25 @@ schema.extendType({
             args: {
                 offset: schema.intArg({ nullable: false }),
                 first: schema.intArg({ nullable: false, description: "ZERO based" }),
-                search: schema.stringArg()
+                searchQuery: schema.stringArg()
             },
-            async resolve(_root, { first, offset, search: searchString }, { db: prisma }) {
+            async resolve(_root, { first, offset, searchQuery }, { db: prisma }) {
                 const ratingList = (await prisma.host.findMany({
-                    where: searchString ? {
+                    where: searchQuery ? {
                         OR: [
                             {
                                 name: {
-                                    contains: searchString
+                                    contains: searchQuery
                                 }
                             },
                             {
                                 description: {
-                                    contains: searchString
+                                    contains: searchQuery
                                 }
                             },
                             {
                                 site: {
-                                    contains: searchString
+                                    contains: searchQuery
                                 }
                             }
                         ]

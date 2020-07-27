@@ -7,11 +7,12 @@ schema.extendType({
     type: "Query",
     definition(t) {
         t.field("hostMembers", {
-            type: "String",
+            type: "Int",
             list: true,
+            nullable: false,
             description: "List of user ids. Only for HOST_OWNER role!",
             async resolve(_root, _args, { vk_params, db: prisma }) {
-                if (!vk_params) return null;
+                if (!vk_params) throw new Error("Not authorized");
                 const ownerHost = await getOwnerHost(+vk_params.user_id, prisma);
                 if (!ownerHost) throw new Error("Allowed only for host owners!");
                 let hostMembers = (await prisma.hostMember.findMany({

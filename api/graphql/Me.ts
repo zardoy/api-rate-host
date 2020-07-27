@@ -5,6 +5,7 @@ schema.objectType({
     definition(t) {
         t.field("role", { type: "UserRole", nullable: false });
         t.field("hostId", { type: "Int", description: "Which host user belongs to" });
+        t.field("membersCount", { type: "Int", nullable: true, description: "Null if user is not host owner" });
     }
 });
 
@@ -34,9 +35,11 @@ schema.extendType({
                 let { user_id } = vk_params;
                 let ownerHost = await getOwnerHost(+user_id, prisma);
                 if (ownerHost) {
+                    let membersCount = await prisma.hostMember.count({ where: { hostId: ownerHost.id } });
                     return {
                         role: "HOST_OWNER",
-                        host: ownerHost.id
+                        host: ownerHost.id,
+                        membersCount
                     };
                 } else {
                     let memberHosts = await prisma.hostMember.findMany({
@@ -48,12 +51,14 @@ schema.extendType({
                     if (memberHosts.length > 0) {
                         return {
                             role: "HOST_MEMBER",
-                            host: memberHosts[0].hostId
+                            host: memberHosts[0].hostId,
+                            membersCount: null
                         };
                     } else {
                         return {
                             role: "USER",
-                            host: null
+                            host: null,
+                            membersCount: null
                         };
                     }
                 }

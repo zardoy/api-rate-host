@@ -55,11 +55,15 @@ scalar Json
 type Me {
   """Which host user belongs to"""
   hostId: Int
+
+  """Null if user is not host owner"""
+  membersCount: Int
   role: UserRole!
 }
 
 type Mutation {
   addMember(userId: Int!): Boolean
+  createComment(responseToCommentId: Int, reviewId: Int!, text: String!): UserComment!
   createOrUpdateRating(
     componentRatings: ComponentRatings
 
@@ -68,36 +72,44 @@ type Mutation {
     hostId: Int!
   ): UserRatingId!
   createOrUpdateReview(hostId: Int!, text: String!): Boolean!
+  deleteComment(commentId: Int!): Boolean
   deleteRating(hostId: Int!): Boolean!
   deleteReview(hostId: Int!): Boolean!
   removeMember(userId: Int!): Boolean
+  updateComment(commentId: Int!, text: String!): Boolean!
 }
 
 type Query {
+  comments(first: Int!, offset: Int!, reviewId: Int!, searchQuery: String): UserCommentsCustomPagination
   host(where: HostWhereUniqueInput!): Host
 
   """List of user ids. Only for HOST_OWNER role!"""
-  hostMembers: [String!]
+  hostMembers: [Int!]!
   hosts(
     """ZERO based"""
     first: Int!
     offset: Int!
-    search: String
+    searchQuery: String
   ): HostsCustomPagination!
   me: Me
-  reviews(first: Int!, offset: Int!, search: String): ReviewsCustomPagination!
+  reviews(first: Int!, hostId: Int!, offset: Int!, searchQuery: String): ReviewsCustomPagination!
+  reviewsTotalCount(hostId: Int!): Int
 }
 
 type ReviewsCustomPagination {
   edges: [UserReview!]!
   hasNext: Boolean!
-  totalCount: Int!
 }
 
 type UserComment {
+  author: UserData!
   commentId: Int!
+  createdAt: DateTime!
+  inResponseToCommentAuthor: UserData
   karma: Int!
+  myVote: VoteType
   text: String!
+  updatedAt: DateTime
 }
 
 type UserCommentsCustomPagination {
@@ -107,8 +119,14 @@ type UserCommentsCustomPagination {
 }
 
 type UserData {
-  fullName: String
-  id: ID
+  fullName: String!
+  id: Int!
+}
+
+type UserDataWithHoster {
+  fullName: String!
+  id: Int!
+  isFromHoster: Boolean!
 }
 
 type UserRatingId {
@@ -116,11 +134,13 @@ type UserRatingId {
 }
 
 type UserReview {
+  createdAt: DateTime!
   generalRating: Int!
   karma: Int!
   myVote: VoteType
-  ratingId: Int!
+  reviewId: Int!
   text: String!
+  updatedAt: DateTime
 }
 
 enum UserRole {

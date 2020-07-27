@@ -1,11 +1,14 @@
 import { schema } from "nexus";
+import _ from "lodash";
 
 schema.objectType({
     name: "UserReview",
     definition(t) {
-        t.model.ratingId();
+        t.model.reviewId();
         t.model.text();
         t.model.karma();
+        t.model.createdAt();
+        t.model.updatedAt();
         t.field("generalRating", {
             type: "Int",
             nullable: false,
@@ -18,18 +21,7 @@ schema.objectType({
         });
         t.field("myVote", {
             type: "VoteType",
-            async resolve({ ratingId }, _args, { db: prisma, vk_params }) {
-                if (!vk_params) throw new Error("Not auth");
-                let myVote = await prisma.userVoteRatings.findOne({
-                    where: {
-                        rating_id_user_id_unique: {
-                            ratingId,
-                            userId: +vk_params.user_id
-                        }
-                    },
-                });
-                return myVote && myVote.isDislike ? "DOWN" : "UP";
-            }
+            nullable: true
         });
     }
 });
@@ -54,56 +46,76 @@ schema.objectType({
             type: "Boolean",
             nullable: false
         });
-        t.field("totalCount", {
-            type: "Int",
-            nullable: false
-        });
+        // t.field("totalCount", {
+        //     type: "Int",
+        //     nullable: false
+        // });
     }
 });
+
+//todo safe fields
 
 schema.extendType({
     type: "Query",
     definition(t) {
+        t.field("reviewsTotalCount", {
+            type: "Int",
+            args: {
+                hostId: schema.intArg({ required: true })
+            },
+            async resolve(_root, { hostId }, { db: prisma }) {
+                return await prisma.userReview.count({
+                    where: {
+                        userRating: { hostId }
+                    }
+                });
+            }
+        });
         t.field("reviews", {
             type: "ReviewsCustomPagination",
             nullable: false,
             args: {
+                hostId: schema.intArg({ required: true }),
                 offset: schema.intArg({ required: true }),
                 first: schema.intArg({ required: true }),
-                search: schema.stringArg(),
+                searchQuery: schema.stringArg(),
             },
-            async resolve(_root, { first, offset, search: searchString }, { db: prisma, vk_params }) {
+            async resolve(_root, { first, offset, searchQuery, hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                let allReviews = (await prisma.userReview.findMany({
-                    where: searchString ? {
-                        text: {
-                            contains: searchString
-                        }
-                    } : undefined,
+                let paginatedReviews = (await prisma.userReview.findMany({
+                    where: {
+                        userRating: { hostId },
+                        ...(searchQuery ? {
+                            OR: [
+                                {
+                                    text: { contains: searchQuery }
+                                }
+                            ]
+                        } : {})
+                    },
                     orderBy: {
                         karma: "desc"
                     },
                     include: {
-                        userRating: {
-                            include: {
-                                userVotes: true
-                            },
-                        }
-                    }
+                        userReviewVotes: true,
+                        userRating: true
+                    },
+                    skip: offset,
+                    take: first
                 }))
                     .map(review => {
-                        let myVote = review.userRating.userVotes.find(vote => vote.userId === +vk_params.user_id);
+                        let myVote = review.userReviewVotes.find(vote => vote.userId === +vk_params.user_id);
                         return {
                             ...review,
                             generalRating: review.userRating.general,
-                            myVote: myVote && myVote.isDislike ? "DOWN" : "UP"
+                            karma: _.sumBy(review.userReviewVotes, vote => vote.voteType === "UP" ? 1 : -1),
+                            myVote: myVote && myVote.voteType
                         };
                     });
-                let end = first + offset;
                 return {
-                    edges: allReviews.slice(offset, end),
-                    hasNext: !!allReviews[end],
-                    totalCount: allReviews.length
+                    edges: paginatedReviews,
+                    //todo: 
+                    hasNext: true
                 };
             }
         });
@@ -122,34 +134,20 @@ schema.extendType({
             },
             async resolve(_root, { hostId, text }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth");
-                let userId = +vk_params.user_id;
-                let dedicatedRating = await prisma.userRating.findOne({
+                await prisma.userRating.update({
                     where: {
                         host_id_user_id_unique: {
                             hostId,
-                            userId
+                            userId: +vk_params.user_id
                         }
                     },
-                    select: {
-                        ratingId: true
-                    }
-                });
-                if (!dedicatedRating) throw new Error("Dedicated rating can't be found. You need to rate this host first.");
-                //todo: test connect
-                await prisma.userReview.upsert({
-                    where: {
-                        ratingId: dedicatedRating.ratingId
-                    },
-                    create: {
-                        text,
-                        userRating: {
-                            connect: {
-                                ratingId: dedicatedRating.ratingId
+                    data: {
+                        userReview: {
+                            upsert: {
+                                create: { text },
+                                update: { text }
                             }
                         }
-                    },
-                    update: {
-                        text
                     }
                 });
                 return true;
@@ -163,21 +161,17 @@ schema.extendType({
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                let dedicatedRating = await prisma.userRating.findOne({
+                await prisma.userRating.update({
                     where: {
                         host_id_user_id_unique: {
                             hostId,
                             userId: +vk_params.user_id
                         }
                     },
-                    select: {
-                        ratingId: true
-                    }
-                });
-                if (!dedicatedRating) throw new Error("Dedicated rating not found");
-                await prisma.userReview.delete({
-                    where: {
-                        ratingId: dedicatedRating.ratingId
+                    data: {
+                        userReview: {
+                            delete: true
+                        }
                     }
                 });
                 return true;
