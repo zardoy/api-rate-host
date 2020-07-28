@@ -77,20 +77,36 @@ schema.extendType({
         });
         t.field("deleteRating", {
             type: "Boolean",
+            description: "User must be notified that this action also drops his review",
             nullable: false,
             args: {
                 hostId: schema.intArg({ required: true })
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
+                //todo: cascading deletes
                 if (!vk_params) throw new Error("Not authorized");
-                //todo: what about review then?
-                await prisma.userRating.delete({
+                let dedicatedRating = await prisma.userRating.findOne({
                     where: {
                         host_id_user_id_unique: {
                             hostId,
                             userId: +vk_params.user_id
                         }
-                    }
+                    },
+                    include: { userReview: true }
+                });
+                if (!dedicatedRating) throw new Error("You didn't rate this host.");
+                if (dedicatedRating.userReview) {
+                    await prisma.userRating.update({
+                        where: { ratingId: dedicatedRating.ratingId },
+                        data: {
+                            userReview: {
+                                delete: true
+                            }
+                        }
+                    });
+                }
+                await prisma.userRating.delete({
+                    where: { ratingId: dedicatedRating.ratingId }
                 });
                 return true;
             }

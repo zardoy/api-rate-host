@@ -1,7 +1,9 @@
 import { schema } from "nexus";
 import { getOwnerHost } from "./Me";
+import { checkDeletedHost } from "./DeletedContent";
 
 const isHostOwnerAuth = async (_: any, __: any, { vk_params, db: prisma }: NexusContext) => !!vk_params && !!await getOwnerHost(+vk_params.user_id, prisma);
+
 
 schema.extendType({
     type: "Query",

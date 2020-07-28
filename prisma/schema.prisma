@@ -8,11 +8,12 @@ datasource db {
 }
 
 model Host {
-    id          Int    @default(autoincrement()) @id
+    id          Int      @default(autoincrement()) @id
     description String
     name        String
     ownerUserId Int
     site        String
+    createdAt   DateTime @default(now())
 
     hostMembers   HostMember[]
     overallRating OverallRating?
@@ -20,8 +21,9 @@ model Host {
 }
 
 model DeletedHost {
-    id        Int      @id
-    deletedAt DateTime @default(now())
+    hostId    Int          @id
+    reason    DeleteReason
+    deletedAt DateTime     @default(now())
 }
 
 // deprecated
@@ -73,7 +75,7 @@ model UserReview {
     karma     Int       @default(0)
     // userFullName String
     createdAt DateTime  @default(now())
-    updatedAt DateTime?
+    updatedAt DateTime? @updatedAt
     ratingId  Int       @unique
 
     userRating      UserRating       @relation(fields: [ratingId], references: [ratingId])
@@ -85,7 +87,7 @@ model UserComment {
     commentId   Int       @default(autoincrement()) @id
     reviewId    Int
     createdAt   DateTime  @default(now())
-    updatedAt   DateTime?
+    updatedAt   DateTime? @updatedAt
     text        String
     toCommentId Int?
     userId      Int
@@ -123,4 +125,9 @@ model UserCommentVote {
 enum VoteType {
     UP
     DOWN
+}
+
+enum DeleteReason {
+    OWNER
+    REPORT
 }

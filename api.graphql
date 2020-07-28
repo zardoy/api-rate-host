@@ -73,6 +73,8 @@ type Mutation {
   ): UserRatingId!
   createOrUpdateReview(hostId: Int!, text: String!): Boolean!
   deleteComment(commentId: Int!): Boolean
+
+  """User must be notified that this action also drops his review"""
   deleteRating(hostId: Int!): Boolean!
   deleteReview(hostId: Int!): Boolean!
   removeMember(userId: Int!): Boolean

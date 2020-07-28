@@ -1,5 +1,6 @@
 import { schema } from "nexus";
 import _ from "lodash";
+import { checkDeletedHost } from "./DeletedContent";
 
 const MAX_RATING = 10, MIN_RATING = 1, NO_RATINGS_RATING = 0;
 
@@ -99,7 +100,11 @@ schema.objectType({
 schema.extendType({
     type: "Query",
     definition(t) {
-        t.crud.host();
+        t.crud.host({
+            async authorize(_root, { where: { id: hostId } }, { db: prisma }) {
+                return typeof hostId === "number" && (await checkDeletedHost(hostId, prisma), true);
+            }
+        });
         //t.crud.hosts(); - can't explicity set the ordering
         t.field("hosts", {
             //todo: return whether should update rating

@@ -161,18 +161,26 @@ schema.extendType({
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                await prisma.userRating.update({
+                //todo: cascading deletes
+                let dedicatedRating = await prisma.userRating.findOne({
                     where: {
                         host_id_user_id_unique: {
                             hostId,
                             userId: +vk_params.user_id
                         }
                     },
-                    data: {
-                        userReview: {
-                            delete: true
-                        }
+                    include: { userReview: true }
+                });
+                //todo: ->
+                if (!dedicatedRating) throw new Error("You didn't rate this host.");
+                if (!dedicatedRating.userReview) throw new Error("You didn't write review for this host.");
+                await prisma.userComment.deleteMany({
+                    where: {
+                        reviewId: dedicatedRating.userReview.reviewId
                     }
+                });
+                await prisma.userReview.delete({
+                    where: { reviewId: dedicatedRating.userReview.reviewId }
                 });
                 return true;
             }
