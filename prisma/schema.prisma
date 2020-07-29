@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-    provider = "mysql"
+    provider = "postgres"
     url      = env("DATABASE_URL")
 }
 
@@ -63,7 +63,7 @@ model UserRating {
     userId   Int
     host     Host   @relation(fields: [hostId], references: [id])
 
-    userReview UserReview?
+    review UserReview?
 
     @@index([hostId], name: "hostId")
     @@unique([hostId, userId], name: "host_id_user_id_unique")
@@ -78,9 +78,9 @@ model UserReview {
     updatedAt DateTime? @updatedAt
     ratingId  Int       @unique
 
-    userRating      UserRating       @relation(fields: [ratingId], references: [ratingId])
-    userReviewVotes UserReviewVote[]
-    userComments    UserComment[]
+    dedicatedRating UserRating       @relation(fields: [ratingId], references: [ratingId])
+    votes           UserReviewVote[]
+    comments        UserComment[]
 }
 
 model UserComment {
@@ -94,8 +94,8 @@ model UserComment {
     karma       Int       @default(0)
     // userFullName     String
 
-    userReview       UserReview        @relation(fields: [reviewId], references: [reviewId])
-    userCommentVotes UserCommentVote[]
+    dedicatedReview UserReview        @relation(fields: [reviewId], references: [reviewId])
+    votes           UserCommentVote[]
 
     @@index([reviewId])
 }
@@ -105,7 +105,7 @@ model UserReviewVote {
     userId   Int
     voteType VoteType
 
-    userReview UserReview @relation(fields: [reviewId], references: [reviewId])
+    review UserReview @relation(fields: [reviewId], references: [reviewId])
 
     @@index([reviewId])
     @@unique([reviewId, userId], name: "review_id_user_id_unique")
@@ -116,7 +116,7 @@ model UserCommentVote {
     userId    Int
     voteType  VoteType
 
-    userComments UserComment @relation(fields: [commentId], references: [commentId])
+    comment UserComment @relation(fields: [commentId], references: [commentId])
 
     @@index([commentId])
     @@unique([commentId, userId], name: "comment_id_user_id_unique")
