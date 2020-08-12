@@ -1,8 +1,8 @@
 import { schema } from "nexus";
-import { getOwnerHost } from "./Me";
+import { getHostOwner } from "./Me";
 import { checkDeletedHost } from "./DeletedContent";
 
-const isHostOwnerAuth = async (_: any, __: any, { vk_params, db: prisma }: NexusContext) => !!vk_params && !!await getOwnerHost(+vk_params.user_id, prisma);
+const isHostOwnerAuth = async (_: any, __: any, { vk_params, db: prisma }: NexusContext) => !!vk_params && !!await getHostOwner(+vk_params.user_id, prisma);
 
 
 schema.extendType({
@@ -15,11 +15,14 @@ schema.extendType({
             description: "List of user ids. Only for HOST_OWNER role!",
             async resolve(_root, _args, { vk_params, db: prisma }) {
                 if (!vk_params) throw new Error("Not authorized");
-                const ownerHost = await getOwnerHost(+vk_params.user_id, prisma);
-                if (!ownerHost) throw new Error("Allowed only for host owners!");
+                const hostOwner = await getHostOwner(vk_params.user_id, prisma);
+                if (!hostOwner) throw new Error("Allowed only for host owners!");
                 let hostMembers = (await prisma.hostMember.findMany({
                     where: {
-                        hostId: ownerHost.id
+                        hostId: hostOwner.id
+                    },
+                    select: {
+                        userId: true
                     }
                 }))
                     .map(hostMember => hostMember.userId);
@@ -38,11 +41,11 @@ schema.extendType({
             type: "Boolean",
             authorize: isHostOwnerAuth,
             args: {
-                userId: schema.intArg({ required: true })
+                userId: schema.stringArg({ required: true })
             },
             async resolve(_root, { userId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new TypeError("no vk_params");
-                let hostOwner = await getOwnerHost(+vk_params.user_id, prisma);
+                const hostOwner = await getHostOwner(vk_params.user_id, prisma);
                 //todo err
                 if (!hostOwner) throw new TypeError("auth error");
                 await prisma.hostMember.create({
@@ -63,18 +66,15 @@ schema.extendType({
             type: "Boolean",
             authorize: isHostOwnerAuth,
             args: {
-                userId: schema.intArg({ required: true })
+                userId: schema.stringArg({ required: true })
             },
             async resolve(_root, { userId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new TypeError("no vk_params");
-                let hostOwner = await getOwnerHost(+vk_params.user_id, prisma);
+                const hostOwner = await getHostOwner(vk_params.user_id, prisma);
                 if (!hostOwner) throw new TypeError("not auth");
-                await prisma.hostMember.deleteMany({
+                await prisma.hostMember.delete({
                     where: {
-                        AND: {
-                            hostId: hostOwner.id,
-                            userId
-                        }
+                        userId
                     }
                 });
                 return true;

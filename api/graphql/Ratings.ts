@@ -1,24 +1,17 @@
 import { schema } from "nexus";
 import _ from "lodash";
+import { RATING_COMPONENTS } from "../app";
+import { deleteOneObjectFromDatabase } from "../errors";
+import { getHostOwner } from "./Me";
 
 schema.inputObjectType({
     name: "ComponentRatings",
     definition(t) {
-        t.field("billing", {
-            type: "Int",
-            required: true
-        });
-        t.field("cpu", {
-            type: "Int",
-            required: true
-        });
-        t.field("ram", {
-            type: "Int",
-            required: true
-        });
-        t.field("support", {
-            type: "Int",
-            required: true
+        RATING_COMPONENTS.map(componentName => {
+            t.field(componentName, {
+                type: "Int",
+                required: true
+            });
         });
     }
 });
@@ -45,16 +38,19 @@ schema.extendType({
                 if (!vk_params) throw new Error("Not authorized");
                 if (!generalRating && !componentRatings) throw new TypeError("one of the args must be provided");
                 if (generalRating && componentRatings) throw new TypeError("Only one of rating args must be provided");
-                let userId = +vk_params.user_id;
+                let userId = vk_params.user_id;
+
+                let hostOwner = await getHostOwner(userId, prisma);
+
                 let calculatedGeneralRating = componentRatings ? _.mean(_.values(componentRatings)) : generalRating;
                 if (typeof calculatedGeneralRating !== "number") throw new TypeError("generalRating is not a number");
                 let dataToUpdateOrCreate = {
-                    ...(componentRatings || {}),
-                    general: calculatedGeneralRating,
+                    ...(componentRatings ? _.mapValues(componentRatings, rating => rating - 1) : {}),
+                    general: calculatedGeneralRating - 1,
                 };
                 return (await prisma.userRating.upsert({
                     where: {
-                        host_id_user_id_unique: {
+                        hostId_userId: {
                             hostId,
                             userId
                         }
@@ -62,7 +58,7 @@ schema.extendType({
                     create: {
                         ...dataToUpdateOrCreate,
                         userId,
-                        host: {
+                        dedicatedHost: {
                             connect: {
                                 id: hostId
                             }
@@ -83,30 +79,18 @@ schema.extendType({
                 hostId: schema.intArg({ required: true })
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
-                //todo: cascading deletes
                 if (!vk_params) throw new Error("Not authorized");
-                let dedicatedRating = await prisma.userRating.findOne({
-                    where: {
-                        host_id_user_id_unique: {
-                            hostId,
-                            userId: +vk_params.user_id
-                        }
+                const userId = vk_params.user_id;
+                //todo: prisma crashes here for some reason.
+                let deleteCount = await prisma.executeRaw;
+                return await deleteOneObjectFromDatabase({
+                    prisma,
+                    query: {
+                        query: `DELETE FROM "UserRating" WHERE "hostId" = $1 AND "userId" = $2`,
+                        params: [hostId, userId]
                     },
-                    include: { userReview: true }
-                });
-                if (!dedicatedRating) throw new Error("You didn't rate this host.");
-                if (dedicatedRating.userReview) {
-                    await prisma.userRating.update({
-                        where: { ratingId: dedicatedRating.ratingId },
-                        data: {
-                            userReview: {
-                                delete: true
-                            }
-                        }
-                    });
-                }
-                await prisma.userRating.delete({
-                    where: { ratingId: dedicatedRating.ratingId }
+                    itemName: "rating",
+                    expectedAction: "rate this host"
                 });
                 return true;
             }

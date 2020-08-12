@@ -1,133 +1,103 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgres"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Host {
-    id          Int      @default(autoincrement()) @id
-    description String
-    name        String
-    ownerUserId Int
-    site        String
-    createdAt   DateTime @default(now())
+  createdAt   DateTime     @default(dbgenerated())
+  description String
+  id          Int          @default(autoincrement()) @id
+  isSuspended Boolean?     @default(false)
+  name        String
+  ownerUserId String       @unique
+  site        String
 
-    hostMembers   HostMember[]
-    overallRating OverallRating?
-    userRatings   UserRating[]
-}
-
-model DeletedHost {
-    hostId    Int          @id
-    reason    DeleteReason
-    deletedAt DateTime     @default(now())
-}
-
-// deprecated
-model ServerInfo {
-    lastRatingUpdate DateTime @unique
+  members  HostMember[]
+  userRatings  UserRating[]
 }
 
 model HostMember {
-    hostId Int
-    userId Int
+  hostId Int
+  userId String @id
 
-    host Host @relation(fields: [hostId], references: [id])
-
-    @@index([hostId], name: "hostId")
-    @@unique([hostId, userId], name: "host_id_user_id_unique")
+  host   Host   @relation(fields: [hostId], references: [id])
 }
 
-model OverallRating {
-    billing Float?
-    cpu     Float?
-    general Float
-    hostId  Int    @unique
-    ram     Float?
-    support Float?
+model HosterResponse {
+  commentId   Int
+  ratingId    Int         @id
 
-    host Host @relation(fields: [hostId], references: [id])
-}
-
-model UserRating {
-    ratingId Int    @default(autoincrement()) @id
-    general  Float
-    billing  Float?
-    cpu      Float?
-    ram      Float?
-    support  Float?
-    hostId   Int
-    userId   Int
-    host     Host   @relation(fields: [hostId], references: [id])
-
-    review UserReview?
-
-    @@index([hostId], name: "hostId")
-    @@unique([hostId, userId], name: "host_id_user_id_unique")
-}
-
-model UserReview {
-    reviewId  Int       @default(autoincrement()) @id
-    text      String
-    karma     Int       @default(0)
-    // userFullName String
-    createdAt DateTime  @default(now())
-    updatedAt DateTime? @updatedAt
-    ratingId  Int       @unique
-
-    dedicatedRating UserRating       @relation(fields: [ratingId], references: [ratingId])
-    votes           UserReviewVote[]
-    comments        UserComment[]
+  userComment UserComment @relation(fields: [commentId], references: [commentId])
 }
 
 model UserComment {
-    commentId   Int       @default(autoincrement()) @id
-    reviewId    Int
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime? @updatedAt
-    text        String
-    toCommentId Int?
-    userId      Int
-    karma       Int       @default(0)
-    // userFullName     String
+  commentId       Int               @default(autoincrement()) @id
+  createdAt       DateTime          @default(now())
+  karma           Int               @default(0)
+  ratingId        Int
+  text            String
+  toCommentId     Int?
+  updatedAt       DateTime? @updatedAt
+  userId          String
 
-    dedicatedReview UserReview        @relation(fields: [reviewId], references: [reviewId])
-    votes           UserCommentVote[]
-
-    @@index([reviewId])
-}
-
-model UserReviewVote {
-    reviewId Int
-    userId   Int
-    voteType VoteType
-
-    review UserReview @relation(fields: [reviewId], references: [reviewId])
-
-    @@index([reviewId])
-    @@unique([reviewId, userId], name: "review_id_user_id_unique")
+  dedicatedReview      UserReview        @relation(fields: [ratingId], references: [ratingId])
+  hosterResponses  HosterResponse[]
+  votes UserCommentVote[]
 }
 
 model UserCommentVote {
-    commentId Int
-    userId    Int
-    voteType  VoteType
+  commentId   Int
+  userId      String
+  voteType    VoteType
 
-    comment UserComment @relation(fields: [commentId], references: [commentId])
+  dedicatedComment UserComment @relation(fields: [commentId], references: [commentId])
 
-    @@index([commentId])
-    @@unique([commentId, userId], name: "comment_id_user_id_unique")
+  @@id([commentId, userId])
+}
+
+model UserRating {
+  billing    Float?
+  cpu        Float?
+  general    Float
+  hostId     Int
+  ram        Float?
+  ratingId   Int          @default(autoincrement()) @id
+  support    Float?
+  userId     String
+
+  dedicatedHost       Host         @relation(fields: [hostId], references: [id])
+  userReview UserReview[]
+
+  @@unique([hostId, userId])
+}
+
+model UserReview {
+  ratingId       Int              @id
+  createdAt      DateTime         @default(now())
+  karma          Int              @default(0)
+  text           String
+  updatedAt      DateTime? @updatedAt
+
+  userRating     UserRating       @relation(fields: [ratingId], references: [ratingId])
+  userComments    UserComment[]
+  userReviewVotes UserReviewVote[]
+}
+
+model UserReviewVote {
+  ratingId   Int
+  userId     String
+  voteType   VoteType
+
+  userReview UserReview @relation(fields: [ratingId], references: [ratingId])
+
+  @@id([ratingId, userId])
 }
 
 enum VoteType {
-    UP
-    DOWN
-}
-
-enum DeleteReason {
-    OWNER
-    REPORT
+  DOWN
+  UP
 }

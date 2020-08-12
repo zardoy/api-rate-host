@@ -24,9 +24,10 @@
         "testEnvironment": "node"
     },
     "scripts": {
-        "start": "nexus dev",
+        "dev": "nexus dev",
         "test": "jest",
         "postinstall": "npx prisma generate",
-        "local-mysql": "docker run --name mysql --rm --publish 3306:3306 -e MYSQL_ROOT_PASSWORD=root mysql:5.7"
+        "introspect-db": "ts-node ./tasks/introspect.ts",
+        "local-postgres": "docker run --name postgres --rm --publish 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:10.12"
     }
 }

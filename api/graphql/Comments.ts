@@ -1,5 +1,7 @@
 import { schema } from "nexus";
 import _ from "lodash";
+import { VOTE_TO_INTEGER_CASE_SQL, GET_MY_VOTE_SQL } from "../utils";
+import { errorMessages } from "../errors";
 
 //todo: calculate karma
 
@@ -7,15 +9,7 @@ schema.objectType({
     name: "UserData",
     definition(t) {
         t.field("fullName", { type: "String", nullable: false });
-        t.field("id", { type: "Int", nullable: false });
-    }
-});
-
-schema.objectType({
-    name: "UserDataWithHoster",
-    definition(t) {
-        t.field("fullName", { type: "String", nullable: false });
-        t.field("id", { type: "Int", nullable: false });
+        t.field("id", { type: "String", nullable: false });
         t.field("isFromHoster", { type: "Boolean", nullable: false });
     }
 });
@@ -26,50 +20,34 @@ schema.objectType({
         t.model.commentId();
         t.model.karma();
         t.model.text();
-        //todo: refactor: tree comments, like on reddit
-        t.field("inResponseToCommentAuthor", {
-            type: "UserData",
-            nullable: true,
-            resolve({ toCommentId }, _args, _ctx) {
-                return toCommentId ? {
-                    id: toCommentId,
-                    fullName: "Pfdlfskf"
-                } : null;
-            }
-        });
         t.model.createdAt();
         t.model.updatedAt();
+        //todo: refactor: tree comments, like on reddit
+        // t.field("inResponseToCommentAuthor", {
+        //     type: "UserData",
+        //     nullable: true
+        // });
+        t.field("toCommentId", {
+            type: "Int",
+            nullable: false,
+            resolve: () => -1
+        });
         t.field("author", {
             type: "UserData",
             nullable: false,
             resolve(comment, _args, _ctx) {
                 return {
                     id: comment.userId,
-                    fullName: "Petya Vasiliy"
+                    fullName: "Petya Vasiliy",
+                    isFromHoster: false
                 };
             }
         });
         t.field("myVote", {
             type: "VoteType",
-            nullable: true,
-            async resolve({ userId, commentId }, _args, { db: prisma, vk_params }) {
-                if (!vk_params) throw new Error("Not authorized");
-                if (userId !== +vk_params.user_id) return null;
-                let userCommentVote = await prisma.userCommentVote.findOne({
-                    where: { comment_id_user_id_unique: { commentId, userId } }
-                });
-                return userCommentVote && userCommentVote.voteType;
-            }
+            nullable: true
         });
     }
-});
-
-schema.enumType({
-    name: "AnswerTo",
-    members: [
-        "COMMENT",
-        "REVIEW"
-    ]
 });
 
 schema.objectType({
@@ -80,14 +58,14 @@ schema.objectType({
             list: true,
             nullable: false
         });
-        t.field("hasNext", {
-            type: "Boolean",
-            nullable: false
-        });
-        t.field("totalCount", {
-            type: "Int",
-            nullable: false
-        });
+        // t.field("hasNext", {
+        //     type: "Boolean",
+        //     nullable: false
+        // });
+        // t.field("totalCount", {
+        //     type: "Int",
+        //     nullable: false
+        // });
     }
 });
 
@@ -102,51 +80,46 @@ schema.extendType({
                 first: schema.intArg({ required: true }),
                 searchQuery: schema.stringArg(),
             },
-            async resolve(_root, { offset, first, searchQuery, reviewId }, { db: prisma, vk_params }) {
+            async resolve(_root, { offset, first, searchQuery, reviewId: ratingId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                let allComments = (await prisma.userComment.findMany({
+                let userId = vk_params.user_id;
+                let hosterCommentId = await prisma.hosterResponse.findOne({
                     where: {
-                        reviewId,
-                        ...(searchQuery ? {
-                            OR: [
-                                {
-                                    text: { contains: searchQuery },
-                                }
-                            ]
-                        } : {})
-                    },
-                    include: {
-                        userCommentVotes: true
-                    },
-                    orderBy: {
-                        createdAt: "desc"
+                        ratingId
                     }
-                }))
-                    .map(comment => {
-                        let myCommentVote = comment.userCommentVotes.find(vote => vote.userId === +vk_params.user_id);
-                        return {
-                            ...comment,
-                            karma: _.sumBy(comment.userCommentVotes, vote => vote.voteType === "UP" ? 1 : -1),
-                            inResponseToCommentAuthor: {
-                                id: comment.toCommentId,
-                                fullName: "Vasya Petr"
-                            },
-                            myVote: myCommentVote && myCommentVote.voteType,
-                            author: {
-                                id: comment.userId,
-                                fullName: "Petr Vasiliy"
+                });
+                let result = (await prisma.queryRaw(
+                    `SELECT "commentId", "userId", sum(${VOTE_TO_INTEGER_CASE_SQL}) as karma, ${GET_MY_VOTE_SQL}, text, "createdAt", "updatedAt", "toCommentId"`
+                    + ` FROM "UserComment" as comments LEFT JOIN "UserCommentVote" as votes USING("commentId")`
+                    + ` WHERE comments."ratingId" = $2 AND comments."commentId" != $3`
+                    + ` GROUP BY comments."ratingId"`
+                    + ` ORDER BY "commentId"`
+                    + ` LIMIT $4 OFFSET $5`,
+                    userId,
+                    ratingId,
+                    hosterCommentId && hosterCommentId.ratingId,
+                    first,
+                    offset
+                ))
+                    .map((comment: any) => ({
+                        author: {
+                            userId: comment.userId,
+                            fullName: "Petya Vasiliy",
+                            isFromHoster: false
+                        },
+                        ...comment
+                    }));
+                if (offset === 0 && hosterCommentId) {
+                    result.shift(
+                        await prisma.userComment.findOne({
+                            where: {
+                                commentId: hosterCommentId.commentId
                             }
-                        };
-                    });
-                //todo: test with empty string
-                if (typeof searchQuery != "string") {
-                    // todo: always display RESPONSE TO REVIEW from the host member/owner to top
+                        })
+                    );
                 }
-                let end = offset + first;
                 return {
-                    edges: allComments.slice(offset, end),
-                    hasNext: !!allComments[end],
-                    totalCount: allComments.length
+                    edges: result
                 };
             }
         });
@@ -164,13 +137,19 @@ schema.extendType({
                 text: schema.stringArg({ required: true }),
                 responseToCommentId: schema.intArg({ required: false }),
             },
-            async resolve(_root, { responseToCommentId, text, reviewId }, { db: prisma, vk_params }) {
+            async resolve(_root, { responseToCommentId, text, reviewId: ratingId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
+                const userId = vk_params.user_id;
                 return await prisma.userComment.create({
                     data: {
-                        userReview: { connect: { reviewId } },
+                        dedicatedReview: {
+                            connect: {
+                                ratingId
+                            }
+                        },
+                        userId,
                         text,
-                        userId: +vk_params.user_id
+                        toCommentId: responseToCommentId
                     }
                 });
             }
@@ -185,13 +164,13 @@ schema.extendType({
             },
             async resolve(_root, { commentId, text }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                let comment = await prisma.userComment.findOne({ where: { commentId } });
-                if (!comment) throw new Error("Comment with such id doesn't exist");
-                if (comment.userId !== +vk_params.user_id) throw new Error("This comment doesn't belong to you");
-                await prisma.userComment.update({
-                    where: { commentId },
-                    data: { text, updatedAt: new Date() }
+                const userId = vk_params.user_id;
+                let { count: updateCount } = await prisma.userComment.updateMany({
+                    where: { commentId, userId },
+                    data: { text }
                 });
+                if (updateCount === 0) throw new Error("There is no comment that belongs to you.");
+                if (updateCount > 0) throw new Error(":WARNING: you just updated more than one comment.");
                 return true;
             }
         });
@@ -202,10 +181,15 @@ schema.extendType({
             },
             async resolve(_root, { commentId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                let comment = await prisma.userComment.findOne({ where: { commentId } });
-                if (!comment) throw new Error("Comment with such id doesn't exist");
-                if (comment.userId !== +vk_params.user_id) throw new Error("This comment doesn't belong to you");
-                await prisma.userComment.delete({ where: { commentId } });
+                const userId = vk_params.user_id;
+                let { count: deleteCount } = await prisma.userComment.deleteMany({
+                    where: {
+                        commentId,
+                        userId
+                    }
+                });
+                if (deleteCount === 0) throw new Error(errorMessages.delete.zero("comment"));
+                if (deleteCount > 1) throw new Error(errorMessages.delete.moreThanOne("comment"));
                 return true;
             }
         });

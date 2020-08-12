@@ -2,16 +2,11 @@
 ### Do not make changes to this file directly
 
 
-enum AnswerTo {
-  COMMENT
-  REVIEW
-}
-
 type componentRating {
-  billing: Float
-  cpu: Float
-  ram: Float
-  support: Float
+  billing: String
+  cpu: String
+  ram: String
+  support: String
 }
 
 input ComponentRatings {
@@ -28,23 +23,24 @@ A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the
 """
 scalar DateTime
 
-type Host {
+type HostDetails {
   componentRating: componentRating!
+  myRating: Int
+}
+
+type HostList {
   description: String!
-  generalRating: Float!
   id: Int!
   name: String!
+
+  """Float actually"""
+  rating: String!
   site: String!
+  votesCount: Int!
 }
 
 type HostsCustomPagination {
-  edges: [Host!]!
-  hasNext: Boolean!
-  totalCount: Int!
-}
-
-input HostWhereUniqueInput {
-  id: Int
+  edges: [HostList!]!
 }
 
 """
@@ -56,13 +52,13 @@ type Me {
   """Which host user belongs to"""
   hostId: Int
 
-  """Null if user is not host owner"""
+  """NULL if user is not host owner"""
   membersCount: Int
   role: UserRole!
 }
 
 type Mutation {
-  addMember(userId: Int!): Boolean
+  addMember(userId: String!): Boolean
   createComment(responseToCommentId: Int, reviewId: Int!, text: String!): UserComment!
   createOrUpdateRating(
     componentRatings: ComponentRatings
@@ -77,13 +73,13 @@ type Mutation {
   """User must be notified that this action also drops his review"""
   deleteRating(hostId: Int!): Boolean!
   deleteReview(hostId: Int!): Boolean!
-  removeMember(userId: Int!): Boolean
+  removeMember(userId: String!): Boolean
   updateComment(commentId: Int!, text: String!): Boolean!
 }
 
 type Query {
   comments(first: Int!, offset: Int!, reviewId: Int!, searchQuery: String): UserCommentsCustomPagination
-  host(where: HostWhereUniqueInput!): Host
+  hostDetails(id: Int!): HostDetails!
 
   """List of user ids. Only for HOST_OWNER role!"""
   hostMembers: [Int!]!
@@ -94,40 +90,35 @@ type Query {
     searchQuery: String
   ): HostsCustomPagination!
   me: Me
-  reviews(first: Int!, hostId: Int!, offset: Int!, searchQuery: String): ReviewsCustomPagination!
+  reviews(first: Int!, hostId: Int!, offset: Int!): ReviewsCustomPagination!
   reviewsTotalCount(hostId: Int!): Int
+
+  """For advanced use."""
+  suspendedHostName(id: Int!): String
 }
 
 type ReviewsCustomPagination {
   edges: [UserReview!]!
-  hasNext: Boolean!
 }
 
 type UserComment {
   author: UserData!
   commentId: Int!
   createdAt: DateTime!
-  inResponseToCommentAuthor: UserData
   karma: Int!
   myVote: VoteType
   text: String!
+  toCommentId: Int!
   updatedAt: DateTime
 }
 
 type UserCommentsCustomPagination {
   edges: [UserComment!]!
-  hasNext: Boolean!
-  totalCount: Int!
 }
 
 type UserData {
   fullName: String!
-  id: Int!
-}
-
-type UserDataWithHoster {
-  fullName: String!
-  id: Int!
+  id: String!
   isFromHoster: Boolean!
 }
 
@@ -136,9 +127,10 @@ type UserRatingId {
 }
 
 type UserReview {
+  commentsCount: Int!
   createdAt: DateTime!
   generalRating: Int!
-  karma: Int!
+  karma: Int
   myVote: VoteType
   reviewId: Int!
   text: String!

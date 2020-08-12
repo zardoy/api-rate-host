@@ -1,6 +1,6 @@
 import { schema } from "nexus";
 import _ from "lodash";
-import { checkDeletedHost } from "./DeletedContent";
+import { RATING_COMPONENTS } from "../app";
 
 const MAX_RATING = 10, MIN_RATING = 1, NO_RATINGS_RATING = 0;
 
@@ -13,56 +13,27 @@ export const calculateRating = (numbersArr: number[], hostId: number) => {
 };
 
 schema.objectType({
-    name: "Host",
+    name: "HostList",
     definition(t) {
-        t.model.id();
-        t.model.name();
-        t.model.description();
-        t.model.site();
-        t.field("generalRating", {
-            type: "Float",
-            nullable: false,
-            async resolve({ id: hostId }, _args, ctx) {
-                let userRatings = await ctx.db.userRating.findMany({
-                    where: {
-                        hostId
-                    },
-                    select: {
-                        general: true
-                    }
-                });
-                return calculateRating(userRatings.reduce((prevArr, { general: generalRating }) => [...prevArr, generalRating], [] as number[]), hostId);
-            }
-        });
+        t.model("Host").id()
+            .name()
+            .description()
+            .site();
+        t.string("rating", { nullable: false, description: "Float actually" });
+        t.int("votesCount", { nullable: false });
+    }
+});
+
+schema.objectType({
+    name: "HostDetails",
+    definition(t) {
         t.field("componentRating", {
             type: "componentRating",
-            nullable: false,
-            async resolve({ id: hostId }, _args, { db: prisma }) {
-                let hostRatingsFromDb = await prisma.userRating.findMany({
-                    where: {
-                        hostId
-                    },
-                    select: {
-                        billing: true,
-                        cpu: true,
-                        ram: true,
-                        support: true
-                    }
-                });
-                //todo: find better solution
-                const firstEntry = hostRatingsFromDb[0];
-                if (!firstEntry) return {
-                    billing: 0,
-                    cpu: 0,
-                    ram: 0,
-                    support: 0
-                };
-                let ratingArrsNullable = hostRatingsFromDb.reduce((prevRatingArr, currentRating) => {
-                    return _.mapValues(prevRatingArr, (arr, key) => [...arr, currentRating[key as keyof typeof prevRatingArr]]);
-                }, _.mapValues(firstEntry, val => [val]));
-                let ratings = _.mapValues(ratingArrsNullable, arr => calculateRating(_.compact(arr), hostId));
-                return ratings;
-            }
+            nullable: false
+        });
+        t.field("myRating", {
+            type: "Int",
+            nullable: true
         });
     }
 });
@@ -70,41 +41,33 @@ schema.objectType({
 schema.objectType({
     name: "componentRating",
     definition(t) {
-        //todo: switch back OverallRating
-        t.model("OverallRating").billing();
-        t.model("OverallRating").cpu();
-        t.model("OverallRating").ram();
-        t.model("OverallRating").support();
+        RATING_COMPONENTS.map(component => t.string(component, { nullable: true }));
+        // t.model("UserRating").billing()
+        //     .cpu()
+        //     .ram()
+        //     .support();
     }
 });
 
 schema.objectType({
     name: "HostsCustomPagination",
     definition(t) {
+        //todo wrong pagination schema (everwhere)
         t.field("edges", {
-            type: "Host",
+            type: "HostList",
             list: true,
-            nullable: false
-        });
-        t.field("hasNext", {
-            type: "Boolean",
-            nullable: false
-        });
-        t.field("totalCount", {
-            type: "Int",
             nullable: false
         });
     }
 });
 
+const wrongHostId = ({ hostId }: { hostId: number; }) => {
+    //todo hostId < lastId ? "deleted" : "not created yet"
+};
+
 schema.extendType({
     type: "Query",
     definition(t) {
-        t.crud.host({
-            async authorize(_root, { where: { id: hostId } }, { db: prisma }) {
-                return typeof hostId === "number" && (await checkDeletedHost(hostId, prisma), true);
-            }
-        });
         //t.crud.hosts(); - can't explicity set the ordering
         t.field("hosts", {
             //todo: return whether should update rating
@@ -116,50 +79,72 @@ schema.extendType({
                 searchQuery: schema.stringArg()
             },
             async resolve(_root, { first, offset, searchQuery }, { db: prisma }) {
-                const ratingList = (await prisma.host.findMany({
-                    where: searchQuery ? {
-                        OR: [
-                            {
-                                name: {
-                                    contains: searchQuery
-                                }
-                            },
-                            {
-                                description: {
-                                    contains: searchQuery
-                                }
-                            },
-                            {
-                                site: {
-                                    contains: searchQuery
-                                }
-                            }
-                        ]
-                    } : undefined,
-                    include: {
-                        userRatings: true
-                    }
-                }))
-                    .map(host => ({
-                        ...host,
-                        averageRating:
-                            calculateRating(
-                                _.compact(
-                                    host.userRatings.reduce((ratingsArr, { general: generalRating }) => {
-                                        return [...ratingsArr, generalRating];
-                                    }, [] as number[])
-                                ),
-                                host.id
-                            )
-                    }))
-                    //DESC
-                    .sort((hostA, hostB) => hostB.averageRating - hostA.averageRating);
-                let end = offset + first;
+                const result =
+                    await prisma.queryRaw(
+                        `SELECT "id", "name", "description", "site", round(avg(r.general + 1), 1) as rating, count(r.general) as "votesCount"`
+                        + ` FROM "Host" as h INNER JOIN "UserRating" as r ON h.id = r."hostId"`
+                        + ` WHERE "isSuspended" = FALSE`
+                        + ` GROUP BY h.id`
+                        + ` ORDER BY rating DESC`
+                        + ` LIMIT $1 OFFSET $2;`,
+                        first,
+                        offset
+                    );
                 return {
-                    edges: ratingList.slice(offset, end),
-                    hasNext: !!ratingList[end],
-                    totalCount: ratingList.length
+                    edges: result
                 };
+            }
+        });
+        t.field("hostDetails", {
+            type: "HostDetails",
+            nullable: false,
+            args: {
+                id: schema.intArg({ required: true })
+            },
+            async resolve(_root, { id: hostId }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth.");
+                let userId = vk_params.user_id;
+                //todo check only if not found in the first sce.
+                let host = await prisma.host.findOne({
+                    where: { id: hostId }
+                });
+                if (!host) throw new Error("Host not found.");
+                if (host.isSuspended) throw new Error(`This host has suspended.`);
+                let componentRating = (await prisma.queryRaw(
+                    //todo: NOT SAFE
+                    `SELECT ${RATING_COMPONENTS.map(component => `avg(r."${component}" + 1) as ${component}`).join(", ")}`
+                    + ` FROM "Host" h INNER JOIN "UserRating" r ON h."id" = r."hostId"`
+                    + ` WHERE h."id" = $1`
+                    + ` GROUP BY h."id"`,
+                    hostId
+                ))[0];
+                let userRating = await prisma.userRating.findOne({
+                    where: {
+                        hostId_userId: {
+                            hostId,
+                            userId
+                        }
+                    }
+                });
+                return {
+                    componentRating,
+                    myRating: userRating && (userRating.general + 1)
+                };
+            }
+        });
+        t.field("suspendedHostName", {
+            type: "String",
+            description: "For advanced use.",
+            args: {
+                id: schema.intArg({ required: true })
+            },
+            async resolve(_root, { id: hostId }, { db: prisma }) {
+                let host = await prisma.host.findOne({
+                    where: { id: hostId }
+                });
+                if (!host) throw new Error("Host not found.");
+                if (!host.isSuspended) throw new Error("This host wasn't suspended.");
+                return host.name;
             }
         });
     }

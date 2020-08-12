@@ -1,0 +1,2 @@
+export const VOTE_TO_INTEGER_CASE_SQL = `CASE votes."voteType" WHEN 'UP' THEN 1 WHEN 'DOWN' THEN -1 END`;
+export const GET_MY_VOTE_SQL = `(CASE sum(CASE votes."userId" WHEN $1 THEN ${VOTE_TO_INTEGER_CASE_SQL} END) WHEN 1 THEN 'UP' WHEN -1 THEN 'DOWN' END) as "myVote"`;

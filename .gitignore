@@ -1,1 +1,4 @@
 node_modules
+/.vscode
+/prisma/.env
+/local-tests
