@@ -1,4 +1,35 @@
-node_modules
-/.vscode
-/prisma/.env
+# temp
 /local-tests
+/tests/last-db-change
+
+# local dotfiles
+.env
+.envrc
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
+
+# Deps
+/node_modules
+/.pnp
+.pnp.js
+
+# Windows
+debug.log
+
+# Mac
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# misc
+/coverage
+/build
