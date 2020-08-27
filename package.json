@@ -40,7 +40,7 @@
         "maxConcurrency": 1
     },
     "scripts": {
-        "dev": "cross-env DEBUG=* nexus dev",
+        "dev": "cross-env DEBUG=vk-io:* nexus dev",
         "test": "jest",
         "test-watch": "jest --watch",
         "postinstall": "npx prisma generate",
