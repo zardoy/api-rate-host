@@ -1,0 +1,46 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Host test hostDetails query tests hostDetails query against snapshot 1`] = `
+Object {
+  "componentRating": Object {
+    "billing": null,
+    "cpu": null,
+    "ram": null,
+    "support": null,
+  },
+  "myRating": null,
+}
+`;
+
+exports[`Host tests hosts query checks other field types 1`] = `
+Object {
+  "descriptionType": "string",
+  "idType": "number",
+  "nameType": "string",
+  "siteType": "string",
+}
+`;
+
+exports[`Me checks me query that I'm owner of the first added host 1`] = `
+Object {
+  "me": Object {
+    "hostId": 1,
+    "membersCount": 100,
+    "role": "HOST_OWNER",
+  },
+}
+`;
+
+exports[`Rating should throw err if I provide incorrect rating number: too big 1`] = `
+[Error: 
+Invalid \`prisma.userRating.upsert()\` invocation in
+/Users/vitaly/Documents/learn-nexus/api/graphql/Ratings.ts:51:53
+
+
+  Error occurred during query execution:
+ConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(Error { kind: Db, cause: Some(DbError { severity: "ERROR", parsed_severity: Some(Error), code: SqlState("22003"), message: "numeric field overflow", detail: Some("A field with precision 1, scale 0 must round to an absolute value less than 10^1."), hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some("numeric.c"), line: Some(6414), routine: Some("apply_typmod") }) }) }): {"response":{"errors":[{"message":"\\nInvalid \`prisma.userRating.upsert()\` invocation in\\n/Users/vitaly/Documents/learn-nexus/api/graphql/Ratings.ts:51:53\\n\\n\\n  Error occurred during query execution:\\nConnectorError(ConnectorError { user_facing_error: None, kind: QueryError(Error { kind: Db, cause: Some(DbError { severity: \\"ERROR\\", parsed_severity: Some(Error), code: SqlState(\\"22003\\"), message: \\"numeric field overflow\\", detail: Some(\\"A field with precision 1, scale 0 must round to an absolute value less than 10^1.\\"), hint: None, position: None, where_: None, schema: None, table: None, column: None, datatype: None, constraint: None, file: Some(\\"numeric.c\\"), line: Some(6414), routine: Some(\\"apply_typmod\\") }) }) })","locations":[{"line":3,"column":13}],"path":["createOrUpdateRating"],"extensions":{"code":"INTERNAL_SERVER_ERROR"}}],"data":null,"status":200},"request":{"query":"\\n        mutation {\\n            createOrUpdateRating(generalRating: 11, hostId: 19) {\\n                ratingId\\n            }\\n        }\\n    "}}]
+`;
+
+exports[`Rating should throw err if I provide incorrect rating number: too small 1`] = `[Error: At least one of ratings args must be provided: {"response":{"errors":[{"message":"At least one of ratings args must be provided","locations":[{"line":3,"column":13}],"path":["createOrUpdateRating"],"extensions":{"code":"INTERNAL_SERVER_ERROR"}}],"data":null,"status":200},"request":{"query":"\\n        mutation {\\n            createOrUpdateRating(generalRating: 0, hostId: 19) {\\n                ratingId\\n            }\\n        }\\n    "}}]`;
+
+exports[`Rating should throw err if I try to create rating on my host 1`] = `[Error: Owners can't rate their hosts: {"response":{"errors":[{"message":"Owners can't rate their hosts","locations":[{"line":3,"column":13}],"path":["createOrUpdateRating"],"extensions":{"code":"INTERNAL_SERVER_ERROR"}}],"data":null,"status":200},"request":{"query":"\\n        mutation {\\n            createOrUpdateRating(generalRating: 3, hostId: 1) {\\n                ratingId\\n            }\\n        }\\n    "}}]`;
