@@ -20,6 +20,7 @@
         "@types/graphql-relay": "^0.6.0",
         "@types/jest": "^26.0.4",
         "@types/lodash": "^4.14.157",
+        "cross-env": "^7.0.2",
         "jest": "^26.1.0",
         "md5-file": "^5.0.0",
         "ts-jest": "^26.1.2",
@@ -39,7 +40,7 @@
         "maxConcurrency": 1
     },
     "scripts": {
-        "dev": "nexus dev",
+        "dev": "cross-env DEBUG=* nexus dev",
         "test": "jest",
         "test-watch": "jest --watch",
         "postinstall": "npx prisma generate",
