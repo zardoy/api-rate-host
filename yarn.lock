@@ -6288,7 +6288,15 @@ verror@1.10.0:
     core-util-is "1.0.2"
     extsprintf "^1.2.0"
 
-vk-io@^4.0.1:
+vk-io-question@^2.0.1:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/vk-io-question/-/vk-io-question-2.0.1.tgz#0fe5ad24509f3414917aa65ecafc320714edf8b8"
+  integrity sha512-357vBBLXxSzmT1x+fykOI7IHpNvmM67WdIdiE3MrUr5fJugsb4cwoGAJvc5OrLG9juu2pZY+z8x6gcpKklCKrQ==
+  dependencies:
+    middleware-io "^2.5.0"
+    vk-io "^4.0.0-rc.30"
+
+vk-io@^4.0.0-rc.30, vk-io@^4.0.1:
   version "4.0.1"
   resolved "https://registry.yarnpkg.com/vk-io/-/vk-io-4.0.1.tgz#dd39e02e4eef8998ff0ec3dd7ea655912aebb33c"
   integrity sha512-0k7w4aS3T8sS4xyN0KYAxTITH6vsA4yVonSvoVRdheSVOcsOZftVdd585CGwT0TBfc5Gb4q3J6k+k22+7mu/Rw==
