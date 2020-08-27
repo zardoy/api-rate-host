@@ -1,0 +1,139 @@
+import { schema } from "nexus";
+import { getHostOwner } from "../utils";
+
+schema.extendType({
+    type: "Mutation",
+    definition(t) {
+        t.field("changeCanRecieveInvites", {
+            type: "Boolean",
+            description: "Returns the state of the setting",
+            args: {
+                newState: schema.booleanArg({ required: true })
+            },
+            async resolve(_root, { newState }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth.");
+                const userId = vk_params.user_id;
+                const userEntry = await prisma.userDisabledInvite.findOne({
+                    where: { userId }
+                });
+                if (newState) {
+                    if (userEntry) throw new Error("This setting already changed to TRUE state");
+                    await prisma.userDisabledInvite.create({
+                        data: { userId }
+                    });
+                } else {
+                    if (!userEntry) throw new Error("This setting already changed to FALSE state");
+                    await prisma.userDisabledInvite.delete({
+                        where: { userId }
+                    });
+                }
+                return !!userEntry;
+            }
+        });
+        t.field("inviteUserToMembers", {
+            type: "Boolean",
+            args: {
+                userIdToInvite: schema.stringArg({ required: true })
+            },
+            async resolve(_root, { userIdToInvite }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth.");
+                const userId = vk_params.user_id;
+                const ownerHost = await getHostOwner(prisma, userId);
+                if (!ownerHost) throw new Error("You not the owner of the host");
+                await prisma.userInvite.create({
+                    data: {
+                        Host: { connect: { id: ownerHost.id } },
+                        toUserId: userIdToInvite
+                    }
+                });
+                return true;
+            }
+        });
+        t.field("acceptOrDeclineInvite", {
+            type: "Boolean",
+            args: {
+                fromHostId: schema.intArg({ required: true }),
+                action: schema.arg({ type: "InviteAction", required: true })
+            },
+            async resolve(_root, { fromHostId, action }, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("Not auth.");
+                const userId = vk_params.user_id;
+                const inviteToUser = await prisma.userInvite.findOne({
+                    where: {
+                        toUserId_fromHostId: {
+                            fromHostId,
+                            toUserId: userId
+                        }
+                    }
+                });
+                if (!inviteToUser) throw new Error("This invite doesn't exist.");
+                await prisma.userInvite.delete({
+                    where: {
+                        toUserId_fromHostId: {
+                            fromHostId,
+                            toUserId: userId
+                        }
+                    }
+                });
+                if (action === "ACCEPT") {
+                    //todo transaction
+                    await prisma.hostMember.create({
+                        data: {
+                            host: { connect: { id: fromHostId } },
+                            userId
+                        }
+                    });
+                }
+                return true;
+            }
+        });
+    }
+});
+
+schema.objectType({
+    name: "myInvites",
+    definition(t) {
+        t.int("fromHostId", {
+            list: true,
+            nullable: false,
+            deprecation: "I'll change this later"
+        });
+    }
+});
+
+schema.extendType({
+    type: "Query",
+    definition(t) {
+        t.field("myInvites", {
+            type: "myInvites",
+            nullable: false,
+            description: "Display tip if new invites setting is disabled",
+            async resolve(_root, _args, { db: prisma, vk_params }) {
+                if (!vk_params) throw new Error("No auth.");
+                const userId = vk_params.user_id;
+                const invitesResponse = await prisma.userInvite.findMany({
+                    where: {
+                        toUserId: userId
+                    },
+                    select: {
+                        fromHostId: true
+                    }
+                });
+                return {
+                    fromHostId: invitesResponse.reduce(
+                        (arr, inviteEntry) => [...arr, inviteEntry.fromHostId],
+                        [] as number[]
+                    )
+                };
+            }
+        });
+    }
+});
+
+schema.enumType({
+    name: "InviteAction",
+    members: [
+        "ACCEPT",
+        "DECLINE"
+    ]
+});

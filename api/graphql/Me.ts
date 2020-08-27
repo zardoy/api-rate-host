@@ -1,28 +1,5 @@
 import { schema } from "nexus";
-
-schema.objectType({
-    name: "Me",
-    definition(t) {
-        t.field("role", { type: "UserRole", nullable: false });
-        t.field("hostId", { type: "Int", description: "Which host user belongs to" });
-        t.field("membersCount", { type: "Int", nullable: true, description: "NULL if user is not host owner" });
-    }
-});
-
-schema.enumType({
-    name: "UserRole",
-    members: [
-        "USER",
-        "HOST_MEMBER",
-        "HOST_OWNER"
-    ]
-});
-
-export const getHostOwner = async (userId: string, prisma: NexusContext["db"]) => {
-    return await prisma.host.findOne({
-        where: { ownerUserId: userId }
-    });
-};
+import { getHostOwner } from "../utils";
 
 schema.extendType({
     type: "Query",
@@ -32,12 +9,12 @@ schema.extendType({
             async resolve(_root, _args, { vk_params, db: prisma }) {
                 if (!vk_params) throw new Error("No auth");
                 let { user_id: userId } = vk_params;
-                let ownerHost = await getHostOwner(userId, prisma);
+                let ownerHost = await getHostOwner(prisma, userId);
                 if (ownerHost) {
                     let membersCount = await prisma.hostMember.count({ where: { hostId: ownerHost.id } });
                     return {
                         role: "HOST_OWNER",
-                        host: ownerHost.id,
+                        hostId: ownerHost.id,
                         membersCount
                     };
                 } else {
@@ -50,13 +27,13 @@ schema.extendType({
                     if (memberHosts) {
                         return {
                             role: "HOST_MEMBER",
-                            host: memberHosts.hostId,
+                            hostId: memberHosts.hostId,
                             membersCount: null
                         };
                     } else {
                         return {
                             role: "USER",
-                            host: null,
+                            hostId: null,
                             membersCount: null
                         };
                     }
@@ -64,4 +41,22 @@ schema.extendType({
             }
         });
     }
+});
+
+schema.objectType({
+    name: "Me",
+    definition(t) {
+        t.field("role", { type: "UserRole", nullable: false });
+        t.field("hostId", { type: "Int", nullable: true, description: "Which host user belongs to. NULL if the role is USER" });
+        t.field("membersCount", { type: "Int", nullable: true, description: "NULL if user is not host owner" });
+    }
+});
+
+schema.enumType({
+    name: "UserRole",
+    members: [
+        "USER",
+        "HOST_MEMBER",
+        "HOST_OWNER"
+    ]
 });

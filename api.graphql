@@ -3,10 +3,10 @@
 
 
 type componentRating {
-  billing: String
-  cpu: String
-  ram: String
-  support: String
+  billing: Float
+  cpu: Float
+  ram: Float
+  support: Float
 }
 
 input ComponentRatings {
@@ -24,17 +24,15 @@ A date-time string at UTC, such as 2007-12-03T10:15:30Z, compliant with the
 scalar DateTime
 
 type HostDetails {
-  componentRating: componentRating!
-  myRating: Int
+  componentRating: componentRating
+  myRating: Float
 }
 
 type HostList {
   description: String!
   id: Int!
   name: String!
-
-  """Float actually"""
-  rating: String!
+  rating: Float!
   site: String!
   votesCount: Int!
 }
@@ -49,7 +47,7 @@ The `JSON` scalar type represents JSON objects as specified by [ECMA-404](http:/
 scalar Json
 
 type Me {
-  """Which host user belongs to"""
+  """Which host user belongs to. NULL if the role is USER"""
   hostId: Int
 
   """NULL if user is not host owner"""
@@ -58,7 +56,6 @@ type Me {
 }
 
 type Mutation {
-  addMember(userId: String!): Boolean
   createComment(responseToCommentId: Int, reviewId: Int!, text: String!): UserComment!
   createOrUpdateRating(
     componentRatings: ComponentRatings
@@ -82,7 +79,7 @@ type Query {
   hostDetails(id: Int!): HostDetails!
 
   """List of user ids. Only for HOST_OWNER role!"""
-  hostMembers: [Int!]!
+  hostMembers: [String!]!
   hosts(
     """ZERO based"""
     first: Int!
@@ -90,6 +87,7 @@ type Query {
     searchQuery: String
   ): HostsCustomPagination!
   me: Me
+  reportContent(contentId: Int!, contentType: ReportContentType!): Boolean
   reviews(first: Int!, hostId: Int!, offset: Int!): ReviewsCustomPagination!
   reviewsTotalCount(hostId: Int!): Int
 
@@ -97,8 +95,14 @@ type Query {
   suspendedHostName(id: Int!): String
 }
 
+enum ReportContentType {
+  COMMENT
+  HOST
+  REVIEW
+}
+
 type ReviewsCustomPagination {
-  edges: [UserReview!]!
+  edges: [UserReview1!]!
 }
 
 type UserComment {
@@ -126,10 +130,10 @@ type UserRatingId {
   ratingId: Int!
 }
 
-type UserReview {
+type UserReview1 {
   commentsCount: Int!
   createdAt: DateTime!
-  generalRating: Int!
+  generalRating: Float!
   karma: Int
   myVote: VoteType
   reviewId: Int!

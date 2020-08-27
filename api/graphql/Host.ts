@@ -2,69 +2,6 @@ import { schema } from "nexus";
 import _ from "lodash";
 import { RATING_COMPONENTS } from "../app";
 
-const MAX_RATING = 10, MIN_RATING = 1, NO_RATINGS_RATING = 0;
-
-/** @returns number 0 or float 1-10 inclusive */
-export const calculateRating = (numbersArr: number[], hostId: number) => {
-    numbersArr = numbersArr.map(rating => rating + 1);
-    let rating = _.ceil(_.mean(numbersArr), 1);
-    if (!_.inRange(MIN_RATING, MAX_RATING + 1)) throw new RangeError(`Calculated rating ${rating} out of range. Host id: ${hostId}`);
-    return isFinite(rating) ? rating : NO_RATINGS_RATING;
-};
-
-schema.objectType({
-    name: "HostList",
-    definition(t) {
-        t.model("Host").id()
-            .name()
-            .description()
-            .site();
-        t.string("rating", { nullable: false, description: "Float actually" });
-        t.int("votesCount", { nullable: false });
-    }
-});
-
-schema.objectType({
-    name: "HostDetails",
-    definition(t) {
-        t.field("componentRating", {
-            type: "componentRating",
-            nullable: false
-        });
-        t.field("myRating", {
-            type: "Int",
-            nullable: true
-        });
-    }
-});
-
-schema.objectType({
-    name: "componentRating",
-    definition(t) {
-        RATING_COMPONENTS.map(component => t.string(component, { nullable: true }));
-        // t.model("UserRating").billing()
-        //     .cpu()
-        //     .ram()
-        //     .support();
-    }
-});
-
-schema.objectType({
-    name: "HostsCustomPagination",
-    definition(t) {
-        //todo wrong pagination schema (everwhere)
-        t.field("edges", {
-            type: "HostList",
-            list: true,
-            nullable: false
-        });
-    }
-});
-
-const wrongHostId = ({ hostId }: { hostId: number; }) => {
-    //todo hostId < lastId ? "deleted" : "not created yet"
-};
-
 schema.extendType({
     type: "Query",
     definition(t) {
@@ -80,9 +17,19 @@ schema.extendType({
             },
             async resolve(_root, { first, offset, searchQuery }, { db: prisma }) {
                 const result =
-                    await prisma.queryRaw(
+                    await prisma.$queryRaw<
+                        {
+                            id: number,
+                            name: string,
+                            description: string,
+                            site: string,
+                            //todo prisma bug?
+                            rating: string | null,
+                            votesCount: number;
+                        }[]
+                    >(
                         `SELECT "id", "name", "description", "site", round(avg(r.general + 1), 1) as rating, count(r.general) as "votesCount"`
-                        + ` FROM "Host" as h INNER JOIN "UserRating" as r ON h.id = r."hostId"`
+                        + ` FROM "Host" as h LEFT JOIN "UserRating" as r ON h.id = r."hostId"`
                         + ` WHERE "isSuspended" = FALSE`
                         + ` GROUP BY h.id`
                         + ` ORDER BY rating DESC`
@@ -91,7 +38,10 @@ schema.extendType({
                         offset
                     );
                 return {
-                    edges: result
+                    edges: result.map(host => ({
+                        ...host,
+                        rating: host.rating === null ? NO_RATINGS_HOST_RATING : _.round(+host.rating, 1)
+                    }))
                 };
             }
         });
@@ -109,25 +59,29 @@ schema.extendType({
                     where: { id: hostId }
                 });
                 if (!host) throw new Error("Host not found.");
-                if (host.isSuspended) throw new Error(`This host has suspended.`);
-                let componentRating = (await prisma.queryRaw(
+                //todo rewrite with prisma aggregate functions
+                type ArrType<T> = T extends (infer U)[] ? U : never;
+                let componentRating = (await prisma.$queryRaw(
                     //todo: NOT SAFE
                     `SELECT ${RATING_COMPONENTS.map(component => `avg(r."${component}" + 1) as ${component}`).join(", ")}`
                     + ` FROM "Host" h INNER JOIN "UserRating" r ON h."id" = r."hostId"`
                     + ` WHERE h."id" = $1`
                     + ` GROUP BY h."id"`,
                     hostId
-                ))[0];
+                ))[0] || null;
                 let userRating = await prisma.userRating.findOne({
                     where: {
                         hostId_userId: {
                             hostId,
                             userId
                         }
+                    },
+                    select: {
+                        general: true
                     }
                 });
                 return {
-                    componentRating,
+                    componentRating: componentRating && _.mapValues(componentRating, (ratingComponent: string | null) => ratingComponent !== null ? _.round(+ratingComponent, 1) : null),
                     myRating: userRating && (userRating.general + 1)
                 };
             }
@@ -149,3 +103,52 @@ schema.extendType({
         });
     }
 });
+
+const NO_RATINGS_HOST_RATING = 0;
+
+schema.objectType({
+    name: "HostList",
+    definition(t) {
+        t.model("Host").id()
+            .name()
+            .description()
+            .site();
+        t.float("rating", { nullable: false });
+        t.int("votesCount", { nullable: false });
+    }
+});
+
+schema.objectType({
+    name: "HostDetails",
+    definition(t) {
+        t.field("componentRating", {
+            type: "componentRating",
+            nullable: true
+        });
+        t.field("myRating", {
+            type: "Float",
+            nullable: true
+        });
+    }
+});
+
+schema.objectType({
+    name: "componentRating",
+    definition(t) {
+        RATING_COMPONENTS.map(component => t.float(component, { nullable: true }));
+    }
+});
+
+schema.objectType({
+    name: "HostsCustomPagination",
+    definition(t) {
+        //todo wrong pagination schema (everwhere)
+        t.field("edges", {
+            type: "HostList",
+            list: true,
+            nullable: false
+        });
+    }
+});
+
+//todo wrong host id deleted or not created yet

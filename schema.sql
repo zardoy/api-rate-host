@@ -35,6 +35,12 @@ CREATE TABLE "UserRating" (
     "support" Decimal(1, 0),
     UNIQUE ("hostId", "userId")
 );
+CREATE TABLE "UserInvite" (
+    "toUserId" text,
+    "fromHostId" integer REFERENCES "Host" ON DELETE CASCADE,
+    PRIMARY KEY("toUserId", "fromHostId")
+);
+CREATE TABLE "UserDisabledInvite" ("userId" text PRIMARY KEY);
 CREATE TABLE "UserReview" (
     -- delete prompt: karma, comments
     "ratingId" integer PRIMARY KEY REFERENCES "UserRating"("ratingId") ON DELETE CASCADE,

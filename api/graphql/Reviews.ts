@@ -1,71 +1,7 @@
 import { schema } from "nexus";
 import _ from "lodash";
-import { deleteOneObjectFromDatabase } from "../errors";
+import { deleteOneObjectFromDatabase } from "../utils";
 import { VOTE_TO_INTEGER_CASE_SQL, GET_MY_VOTE_SQL } from "../utils";
-
-schema.objectType({
-    name: "UserReview",
-    definition(t) {
-        t.model.ratingId({
-            alias: "reviewId"
-        });
-        t.model.text();
-        t.model.createdAt();
-        t.model.updatedAt();
-        t.field("karma", {
-            type: "Int",
-            nullable: true
-        });
-        t.field("generalRating", {
-            type: "Int",
-            nullable: false,
-            async resolve({ ratingId }, _args, { db: prisma }) {
-                return (await prisma.userRating.findOne({
-                    where: { ratingId },
-                    select: { general: true }
-                }))!.general;
-            }
-        });
-        t.field("myVote", {
-            type: "VoteType",
-            nullable: true
-        });
-        t.field("commentsCount", {
-            type: "Int",
-            nullable: false,
-            resolve: async (review, _args, { db: prisma }) => await prisma.userComment.count({ where: { ratingId: review.ratingId } })
-        });
-    }
-});
-
-schema.enumType({
-    name: "VoteType",
-    members: [
-        "UP",
-        "DOWN"
-    ]
-});
-
-schema.objectType({
-    name: "ReviewsCustomPagination",
-    definition(t) {
-        t.field("edges", {
-            type: "UserReview",
-            list: true,
-            nullable: false
-        });
-        // t.field("hasNext", {
-        //     type: "Boolean",
-        //     nullable: false
-        // });
-        // t.field("totalCount", {
-        //     type: "Int",
-        //     nullable: false
-        // });
-    }
-});
-
-//todo safe fields
 
 schema.extendType({
     type: "Query",
@@ -97,18 +33,17 @@ schema.extendType({
             async resolve(_root, { first, offset, /* searchQuery, */ hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
                 const userId = vk_params.user_id;
-                let reviews = await prisma.queryRaw<
-                    //todo
-                    any[]
-                // {
-                //     reviewId: number,
-                //     generalRating: number,
-                //     karma: number,
-                //     myVote: number,
-                //     text: string,
-                //     createdAt: string,
-                //     updatedAt: string
-                // }[]
+                type RawQuery = {
+                    reviewId: number,
+                    generalRating: number | string,
+                    karma: number,
+                    myVote: "UP" | "DOWN" | null,
+                    text: string,
+                    createdAt: string,
+                    updatedAt: string;
+                }[];
+                let reviews = await (await prisma.$queryRaw<
+                    RawQuery
                 >(
                     `SELECT "ratingId" as "reviewId", (general + 1)::integer as "generalRating", sum(${VOTE_TO_INTEGER_CASE_SQL}) as karma, ${GET_MY_VOTE_SQL}, text, "createdAt", "updatedAt"`
                     + ` FROM "UserRating" as ratings INNER JOIN "UserReview" as reviews USING("ratingId") LEFT JOIN "UserReviewVote" as votes USING("ratingId")`
@@ -120,16 +55,20 @@ schema.extendType({
                     hostId,
                     first,
                     offset
-                );
-                for (let review of reviews) {
-                    review.generalRating = +review.generalRating;
-                    review.commentsCount = await prisma.userComment.count({
-                        where: {
-                            ratingId: review.reviewId
-                        }
+                )).reduce(async (prevPromise, review) => {
+                    const reviewsArr = await prevPromise;
+                    //todo rewrite spread arr
+                    reviewsArr.push({
+                        ...review,
+                        generalRating: +review.generalRating,
+                        commentsCount: await prisma.userComment.count({
+                            where: {
+                                ratingId: review.reviewId
+                            }
+                        })
                     });
-                }
-                console.log(reviews);
+                    return reviewsArr;
+                }, Promise.resolve([] as RawQuery & { generalRating: number, commentsCount: number; }[]));
                 return {
                     edges: reviews,
                 };
@@ -197,3 +136,65 @@ schema.extendType({
         });
     }
 });
+
+schema.objectType({
+    name: "UserReview1",
+    definition(t) {
+        t.int("reviewId", {
+            nullable: false
+        });
+        t.model("UserReview").text()
+            .createdAt()
+            .updatedAt();
+        t.int("karma", {
+            nullable: true
+        });
+        t.float("generalRating", {
+            nullable: false,
+            async resolve({ reviewId: ratingId }, _args, { db: prisma }) {
+                return (await prisma.userRating.findOne({
+                    where: { ratingId },
+                    select: { general: true }
+                }))!.general;
+            }
+        });
+        t.field("myVote", {
+            type: "VoteType",
+            nullable: true
+        });
+        t.int("commentsCount", {
+            nullable: false,
+            resolve: async ({ reviewId: ratingId }, _args, { db: prisma }) => await prisma.userComment.count({ where: { ratingId } })
+        });
+    }
+});
+
+schema.enumType({
+    name: "VoteType",
+    members: [
+        "UP",
+        "DOWN"
+    ]
+});
+
+schema.objectType({
+    name: "ReviewsCustomPagination",
+    definition(t) {
+        t.field("edges", {
+            //todo 1
+            type: "UserReview1",
+            list: true,
+            nullable: false
+        });
+        // t.field("hasNext", {
+        //     type: "Boolean",
+        //     nullable: false
+        // });
+        // t.field("totalCount", {
+        //     type: "Int",
+        //     nullable: false
+        // });
+    }
+});
+
+//todo safe fields

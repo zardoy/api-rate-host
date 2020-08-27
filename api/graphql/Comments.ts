@@ -3,72 +3,6 @@ import _ from "lodash";
 import { VOTE_TO_INTEGER_CASE_SQL, GET_MY_VOTE_SQL } from "../utils";
 import { errorMessages } from "../errors";
 
-//todo: calculate karma
-
-schema.objectType({
-    name: "UserData",
-    definition(t) {
-        t.field("fullName", { type: "String", nullable: false });
-        t.field("id", { type: "String", nullable: false });
-        t.field("isFromHoster", { type: "Boolean", nullable: false });
-    }
-});
-
-schema.objectType({
-    name: "UserComment",
-    definition(t) {
-        t.model.commentId();
-        t.model.karma();
-        t.model.text();
-        t.model.createdAt();
-        t.model.updatedAt();
-        //todo: refactor: tree comments, like on reddit
-        // t.field("inResponseToCommentAuthor", {
-        //     type: "UserData",
-        //     nullable: true
-        // });
-        t.field("toCommentId", {
-            type: "Int",
-            nullable: false,
-            resolve: () => -1
-        });
-        t.field("author", {
-            type: "UserData",
-            nullable: false,
-            resolve(comment, _args, _ctx) {
-                return {
-                    id: comment.userId,
-                    fullName: "Petya Vasiliy",
-                    isFromHoster: false
-                };
-            }
-        });
-        t.field("myVote", {
-            type: "VoteType",
-            nullable: true
-        });
-    }
-});
-
-schema.objectType({
-    name: "UserCommentsCustomPagination",
-    definition(t) {
-        t.field("edges", {
-            type: "UserComment",
-            list: true,
-            nullable: false
-        });
-        // t.field("hasNext", {
-        //     type: "Boolean",
-        //     nullable: false
-        // });
-        // t.field("totalCount", {
-        //     type: "Int",
-        //     nullable: false
-        // });
-    }
-});
-
 schema.extendType({
     type: "Query",
     definition(t) {
@@ -78,7 +12,7 @@ schema.extendType({
                 reviewId: schema.intArg({ required: true }),
                 offset: schema.intArg({ required: true }),
                 first: schema.intArg({ required: true }),
-                searchQuery: schema.stringArg(),
+                searchQuery: schema.stringArg({ required: false }),
             },
             async resolve(_root, { offset, first, searchQuery, reviewId: ratingId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
@@ -88,7 +22,7 @@ schema.extendType({
                         ratingId
                     }
                 });
-                let result = (await prisma.queryRaw(
+                let result = (await prisma.$queryRaw(
                     `SELECT "commentId", "userId", sum(${VOTE_TO_INTEGER_CASE_SQL}) as karma, ${GET_MY_VOTE_SQL}, text, "createdAt", "updatedAt", "toCommentId"`
                     + ` FROM "UserComment" as comments LEFT JOIN "UserCommentVote" as votes USING("commentId")`
                     + ` WHERE comments."ratingId" = $2 AND comments."commentId" != $3`
@@ -192,6 +126,62 @@ schema.extendType({
                 if (deleteCount > 1) throw new Error(errorMessages.delete.moreThanOne("comment"));
                 return true;
             }
+        });
+    }
+});
+
+schema.objectType({
+    name: "UserData",
+    definition(t) {
+        t.field("fullName", { type: "String", nullable: false });
+        t.field("id", { type: "String", nullable: false });
+        t.field("isFromHoster", { type: "Boolean", nullable: false });
+    }
+});
+
+schema.objectType({
+    name: "UserComment",
+    definition(t) {
+        t.model.commentId();
+        t.model.karma();
+        t.model.text();
+        t.model.createdAt();
+        t.model.updatedAt();
+        //todo: refactor: tree comments, like on reddit
+        // t.field("inResponseToCommentAuthor", {
+        //     type: "UserData",
+        //     nullable: true
+        // });
+        t.field("toCommentId", {
+            type: "Int",
+            nullable: false,
+            resolve: () => -1
+        });
+        t.field("author", {
+            type: "UserData",
+            nullable: false,
+            resolve(comment, _args, _ctx) {
+                return {
+                    id: comment.userId,
+                    fullName: "Petya Vasiliy",
+                    isFromHoster: false
+                };
+            }
+        });
+        t.field("myVote", {
+            type: "VoteType",
+            nullable: true
+        });
+    }
+});
+
+schema.objectType({
+    name: "UserCommentsCustomPagination",
+    definition(t) {
+        t.field("edges", {
+            type: "UserComment",
+            list: true,
+            nullable: false
         });
     }
 });

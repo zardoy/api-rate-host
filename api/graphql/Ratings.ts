@@ -1,27 +1,8 @@
 import { schema } from "nexus";
 import _ from "lodash";
 import { RATING_COMPONENTS } from "../app";
-import { deleteOneObjectFromDatabase } from "../errors";
-import { getHostOwner } from "./Me";
-
-schema.inputObjectType({
-    name: "ComponentRatings",
-    definition(t) {
-        RATING_COMPONENTS.map(componentName => {
-            t.field(componentName, {
-                type: "Int",
-                required: true
-            });
-        });
-    }
-});
-
-schema.objectType({
-    name: "UserRatingId",
-    definition(t) {
-        t.model("UserRating").ratingId();
-    }
-});
+import { deleteOneObjectFromDatabase, getHostOwner } from "../utils";
+import { checkUserInputRatingBounds } from "../errors";
 
 schema.extendType({
     type: "Mutation",
@@ -36,14 +17,19 @@ schema.extendType({
             },
             async resolve(_root, { hostId, generalRating, componentRatings }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
-                if (!generalRating && !componentRatings) throw new TypeError("one of the args must be provided");
+                if (!generalRating && !componentRatings) throw new TypeError("At least one of ratings args must be provided");
                 if (generalRating && componentRatings) throw new TypeError("Only one of rating args must be provided");
                 let userId = vk_params.user_id;
 
-                let hostOwner = await getHostOwner(userId, prisma);
+                //check if owner
+                let hostOwner = await getHostOwner(prisma, userId);
+                if (hostOwner && hostOwner.id === hostId) throw new Error("Owners can't rate their hosts");
 
-                let calculatedGeneralRating = componentRatings ? _.mean(_.values(componentRatings)) : generalRating;
-                if (typeof calculatedGeneralRating !== "number") throw new TypeError("generalRating is not a number");
+                //check input
+                if (generalRating) checkUserInputRatingBounds(generalRating);
+                else Object.entries(componentRatings!).forEach(([componentName, rating]) => checkUserInputRatingBounds(rating, componentName));
+
+                let calculatedGeneralRating = componentRatings ? _.mean(_.values(componentRatings)) : generalRating!;
                 let dataToUpdateOrCreate = {
                     ...(componentRatings ? _.mapValues(componentRatings, rating => rating - 1) : {}),
                     general: calculatedGeneralRating - 1,
@@ -81,8 +67,6 @@ schema.extendType({
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
                 const userId = vk_params.user_id;
-                //todo: prisma crashes here for some reason.
-                let deleteCount = await prisma.executeRaw;
                 return await deleteOneObjectFromDatabase({
                     prisma,
                     query: {
@@ -92,8 +76,26 @@ schema.extendType({
                     itemName: "rating",
                     expectedAction: "rate this host"
                 });
-                return true;
             }
         });
+    }
+});
+
+schema.inputObjectType({
+    name: "ComponentRatings",
+    definition(t) {
+        RATING_COMPONENTS.map(componentName => {
+            t.field(componentName, {
+                type: "Int",
+                required: true
+            });
+        });
+    }
+});
+
+schema.objectType({
+    name: "UserRatingId",
+    definition(t) {
+        t.model("UserRating").ratingId();
     }
 });

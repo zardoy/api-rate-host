@@ -1,4 +1,4 @@
-import { use, schema } from "nexus";
+import { use, schema, settings, server } from "nexus";
 import { prisma } from "nexus-plugin-prisma";
 import _ from "lodash";
 
@@ -9,6 +9,16 @@ import * as crypto from "crypto";
 dotenv.config({
     //todo check compiled
     path: path.resolve(__dirname, "../prisma/.env")
+});
+
+settings.change({
+    schema: {
+        nullable: {
+            //todo
+            // inputs: false,
+            // outputs: false
+        }
+    }
 });
 
 export const RATING_COMPONENTS = [
@@ -61,6 +71,8 @@ schema.addToContext((req) => {
     const ctx_vk_params = pickVkParams(vk_launch_params, ["user_id", "app_id", "platform"]);
     ctx_vk_params.user_id = "35039";
     if (!isFinite(+ctx_vk_params.user_id)) throw new TypeError(`user_id param is not a number: ${ctx_vk_params.user_id}`);
+    //todo not safe
+    if (process.env.NODE_ENV === "test" && typeof process.env.TEST_USER_ID === "string") ctx_vk_params.user_id = process.env.TEST_USER_ID;
     return {
         vk_params: ctx_vk_params
     };
@@ -73,15 +85,5 @@ schema.addToContext((req) => {
 });
 
 use(
-    prisma({
-        client: {
-            options: {
-                __internal: {
-                    debug: true,
-                    measurePerformance: true
-                },
-                log: ["query", "warn"]
-            }
-        }
-    })
+    prisma()
 );
