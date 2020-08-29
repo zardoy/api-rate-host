@@ -40,7 +40,6 @@ CREATE TABLE "UserInvite" (
     "fromHostId" integer REFERENCES "Host" ON DELETE CASCADE,
     PRIMARY KEY("toUserId", "fromHostId")
 );
-CREATE TABLE "UserDisabledInvite" ("userId" text PRIMARY KEY);
 CREATE TABLE "UserReview" (
     -- delete prompt: karma, comments
     "ratingId" integer PRIMARY KEY REFERENCES "UserRating"("ratingId") ON DELETE CASCADE,

@@ -18,7 +18,7 @@ model Host {
 
   members     HostMember[]
   userRatings UserRating[]
-  UserInvite  UserInvite[]
+  userInvite  UserInvite[]
 }
 
 model HostMember {
@@ -31,13 +31,9 @@ model HostMember {
 model UserInvite {
   fromHostId Int
   toUserId   String
-  Host       Host   @relation(fields: [fromHostId], references: [id])
+  host       Host   @relation(fields: [fromHostId], references: [id])
 
   @@id([toUserId, fromHostId])
-}
-
-model UserDisabledInvite {
-  userId String @id
 }
 
 model HosterResponse {
