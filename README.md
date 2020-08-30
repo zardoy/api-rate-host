@@ -9,7 +9,7 @@
    - prisma/.env с содержимым:
 
         `DATABASE_URL=`<адресс к бд - локалька: `"postgresql://postgres:postgres@localhost:5432/ratehost"`>
-        `VK_SECRET_KEY=`<секретный ключ приложения, нужен для проверки подписи>
+        `VK_SECRET_KEY=`<защищенный ключ приложения, нужен для проверки подписи>
 2. `yarn start` - у вас должен быть установлен [yarn](https://yarnpkg.com/getting-started/install#global-install).
 
 ## Scripts
