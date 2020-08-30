@@ -56,6 +56,7 @@ type Me {
 }
 
 type Mutation {
+  applyInviteKey(fromHostId: String!): Boolean
   createComment(responseToCommentId: Int, reviewId: Int!, text: String!): UserComment!
   createOrUpdateRating(
     componentRatings: ComponentRatings
@@ -70,6 +71,7 @@ type Mutation {
   """User must be notified that this action also drops his review"""
   deleteRating(hostId: Int!): Boolean!
   deleteReview(hostId: Int!): Boolean!
+  getInviteKey(userIdToInvite: String!): String
   removeMember(userId: String!): Boolean
   updateComment(commentId: Int!, text: String!): Boolean!
 }
