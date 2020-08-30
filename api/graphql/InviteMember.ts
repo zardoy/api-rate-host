@@ -55,6 +55,9 @@ schema.extendType({
             async resolve(_root, { inviteKey }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth.");
                 const userId = vk_params.user_id;
+                const ownersHost = await getHostOwner(prisma, userId);
+                if (ownersHost) throw new Error(`You can't join the host because you are host owner.`);
+
                 const fromHostId = +inviteKey;
                 if (!isFinite(fromHostId)) throw new TypeError(`Wrong invite key`);
                 const dedicatedInvite = await prisma.userInvite.findOne({
