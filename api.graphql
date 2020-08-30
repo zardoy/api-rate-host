@@ -56,7 +56,7 @@ type Me {
 }
 
 type Mutation {
-  applyInviteKey(fromHostId: String!): Boolean
+  applyInviteKey(inviteKey: String!): Boolean
   createComment(responseToCommentId: Int, reviewId: Int!, text: String!): UserComment!
   createOrUpdateRating(
     componentRatings: ComponentRatings

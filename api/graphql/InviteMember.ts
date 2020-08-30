@@ -39,7 +39,7 @@ schema.extendType({
                     }
                     userInviteEntry = await prisma.userInvite.create({
                         data: {
-                            Host: { connect: { id: ownerHost.id } },
+                            host: { connect: { id: ownerHost.id } },
                             toUserId: userIdToInvite
                         }
                     });
@@ -50,12 +50,12 @@ schema.extendType({
         t.field("applyInviteKey", {
             type: "Boolean",
             args: {
-                fromHostId: schema.stringArg({ required: true })
+                inviteKey: schema.stringArg({ required: true })
             },
-            async resolve(_root, { fromHostId }, { db: prisma, vk_params }) {
+            async resolve(_root, { inviteKey }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth.");
                 const userId = vk_params.user_id;
-                fromHostId = +fromHostId;
+                const fromHostId = +inviteKey;
                 if (!isFinite(fromHostId)) throw new TypeError(`Wrong invite key`);
                 const dedicatedInvite = await prisma.userInvite.findOne({
                     where: {
