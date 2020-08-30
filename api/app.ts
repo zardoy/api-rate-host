@@ -41,12 +41,20 @@ const pickVkParams = <K extends string = string>(vk_params: VK_params, pick_para
     ) as any;
 };
 
-schema.addToContext((req) => {
+schema.addToContext(({ req }) => {
     //todo err
-    if (process.env.VK_SECRET_KEY === undefined) throw new TypeError("Env VK_SECRET_KEY not defined");
-    // try {
-    const paramsForTesting = process.env.VK_PARAMS_FOR_TESTING;
-    const vkParams = new URLSearchParams(paramsForTesting/* req.headers.authorization */);
+    if (process.env.VK_SECRET_KEY === undefined) throw new TypeError(`Environment variable VK_SECRET_KEY is not provided.`);
+
+    //todo not safe
+    if (process.env.NEXUS_STAGE === "test" && process.env.TEST_USER_ID) {
+        return {
+            vk_params: {
+                user_id: process.env.TEST_USER_ID
+            }
+        };
+    };
+
+    const vkParams = new URLSearchParams(req.headers.authorization);
 
     const SIGN_SECRET_URL_PARAM = vkParams.get("sign");
     vkParams.forEach((_paramValue, paramKey) => {
@@ -71,17 +79,10 @@ schema.addToContext((req) => {
     const ctx_vk_params = pickVkParams(vk_launch_params, ["user_id", "app_id", "platform"]);
     ctx_vk_params.user_id = "35039";
     if (!isFinite(+ctx_vk_params.user_id)) throw new TypeError(`user_id param is not a number: ${ctx_vk_params.user_id}`);
-    //todo not safe
-    if (process.env.NODE_ENV === "test" && typeof process.env.TEST_USER_ID === "string") ctx_vk_params.user_id = process.env.TEST_USER_ID;
+
     return {
         vk_params: ctx_vk_params
     };
-    // } catch (err) {
-    //     if (process.env.)
-    //     return {
-    //         vk_params: null
-    //     };
-    // }
 });
 
 use(
