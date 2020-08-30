@@ -64,28 +64,27 @@ on.start(async () => {
 
         const oldSend = ctx.send.bind(ctx);
         ctx.send = async (text, params = {}) => {
-            const keyboardToSend = params.keyboard || (() => {
-                const defaultKeyboard = Keyboard.builder().oneTime(true);
-                if (ctx.usersDataFromDb.host) {
+            const getMainMenuKeyboard = () => {
+                const mainMenuKeyboard = Keyboard.builder().oneTime(true);
+                if (ctx.usersDataFromDb.host || ctx.usersDataFromDb.hostMember) {
                     //both owner and member can edit the info
-                    defaultKeyboard
+                    mainMenuKeyboard
                         .textButton({
                             label: "/edithost - ред. хост",
                             color: "primary"
                         });
                     //удалить хост можно только прописав команду вручную
                 } else {
-                    defaultKeyboard
+                    mainMenuKeyboard
                         .textButton({
                             label: "/newhost создать хост"
                         });
                 }
-                return defaultKeyboard;
-            })();
+                return mainMenuKeyboard;
+            };
             //todo-low refactor
             return await oldSend(text, {
-                ...(keyboardToSend ? { keyboard: keyboardToSend } : {}),
-                ...(params || _.omit(params, "keyboard"))
+                keyboard: params.keyboard || getMainMenuKeyboard()
             });
         };
         await next();
