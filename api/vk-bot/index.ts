@@ -1,8 +1,8 @@
 import { on } from "nexus";
 import * as dotenv from "dotenv";
 import * as path from "path";
-import { PrismaClient, Host, UserInvite } from "@prisma/client";
-import { VK, Keyboard, MessageContext, KeyboardBuilder } from "vk-io";
+import { PrismaClient, Host, HostMember } from "@prisma/client";
+import { VK, Keyboard, MessageContext } from "vk-io";
 import { QuestionManager, IQuestionMessageContext } from "vk-io-question";
 import _ from "lodash";
 import Debug from "@prisma/debug";
@@ -25,8 +25,6 @@ on.start(async () => {
     const prisma = new PrismaClient();
     const vk = new VK({
         token: process.env.VK_SUPER_SECRET_TOKEN,
-        //bad internet connection todo: remove it
-        apiTimeout: 50_000
     });
     //todo question?
     const questionManager/* : QuestionManager & { questions: string } */ = new QuestionManager();
@@ -36,7 +34,7 @@ on.start(async () => {
         question: (question: string, params?: Parameters<MessageContext["send"]>[1]) => ReturnType<IQuestionMessageContext["question"]>,
         usersDataFromDb: {
             host: Host | null,
-            invitesCount: number;
+            hostMember: (HostMember & { host: Host; }) | null;
         };
     };
     type QuestionsMap = Map<number, unknown>;
@@ -54,9 +52,12 @@ on.start(async () => {
                     ownerUserId: senderId.toString()
                 }
             }),
-            invitesCount: await prisma.userInvite.count({
+            hostMember: await prisma.hostMember.findOne({
                 where: {
-                    toUserId: senderId.toString()
+                    userId: senderId.toString()
+                },
+                include: {
+                    host: true
                 }
             })
         };
@@ -66,29 +67,17 @@ on.start(async () => {
             const keyboardToSend = params.keyboard || (() => {
                 const defaultKeyboard = Keyboard.builder().oneTime(true);
                 if (ctx.usersDataFromDb.host) {
+                    //both owner and member can edit the info
                     defaultKeyboard
                         .textButton({
-                            label: "/editinfo - ред. хост",
+                            label: "/edithost - ред. хост",
                             color: "primary"
-                        })
-                        .textButton({
-                            label: "/invite - пригласить",
-                            color: "positive"
                         });
                     //удалить хост можно только прописав команду вручную
                 } else {
                     defaultKeyboard
                         .textButton({
                             label: "/newhost создать хост"
-                        });
-                }
-                if (ctx.usersDataFromDb.invitesCount !== 0) {
-                    defaultKeyboard
-                        .oneTime()
-                        .row()
-                        .textButton({
-                            label: "/invites - приглашения",
-                            color: "positive"
                         });
                 }
                 return defaultKeyboard;
@@ -146,6 +135,14 @@ on.start(async () => {
         // поиск и исполнение комманды
         const { senderId } = ctx;
 
+        const getHostMember = async () => {
+            return await prisma.hostMember.findOne({
+                where: {
+                    userId: senderId.toString()
+                }
+            });
+        };
+
         //вызываем справку для кнопки начать
         if (ctx.messagePayload && ctx.messagePayload.command === "start") ctx.text = "/help";
 
@@ -171,203 +168,163 @@ on.start(async () => {
             ctx.usersDataFromDb.host = null;
         };
 
-        let isFromDeclineCommand = false;
-        const commands: Record<string, () => Promise<void>> = {
-            help: async () => {
-                const { invitesCount } = ctx.usersDataFromDb;
+        const commands: Record<string, {
+            execute: () => Promise<void>;
+            isAvailable: () => Promise<{ available: true; } | { available: false, reason: string; }>;
+            usage: string;
+        }> = {
+            newhost: {
+                execute: async () => {
+                    const PENCIL_SMILE = `✏️`;
+                    const LINK_SMILE = `🔗`;
 
-                const allAvailable = commandParts[1] === "all";
-                const hostAvailable = allAvailable || !!ctx.usersDataFromDb!.host;
-                const hasAnyInvites = allAvailable || invitesCount !== 0;
-                await ctx.send(`
-                        ${allAvailable ? `Все` : `Доступные`} действия:
-                        - /help - ${!allAvailable ? "эта справка" : "cправка с доступными коммандами"}
-                        - /help all - ${allAvailable ? "эта справка" : "cправка со всеми коммандами"}
-                        ${allAvailable ? `
-                            - /stop - выход из допросника и сброса сост. бота
-                        ` : ""}
+                    const components = {
+                        name: {
+                            maxLength: 25,
+                            question: `${PENCIL_SMILE} Как назовем хост? - введите /stop для выхода`
+                        },
+                        site: {
+                            maxLength: 50,
+                            question: `${LINK_SMILE} Дай ссылку на сайт этого хоста`
+                        },
+                        description: (() => {
+                            const maxLength = 350;
+                            return {
+                                maxLength,
+                                question: `${PENCIL_SMILE} Теперь давай описание, только поподробней ;) - макс ${maxLength} символов`
+                            };
+                        })()
+                    };
+                    type ComponentName = keyof typeof components;
 
-                        ${allAvailable || !hostAvailable ? `
-                            - /newhost - создать хост
-                        ` : ""}
-                        ${allAvailable || hostAvailable ? `
-                            - /removehost - удалить хост
-                            - /edithost - ред. данные хоста
-                            - /invite [упоминание юзеров через пробел] - пригласить в модераторы
-                        ` : ""}
+                    const newHostData = new Map<ComponentName, string>();
 
-                        ${allAvailable || hasAnyInvites ? `
-                        - /invites - показать приглашения (${invitesCount})
-                        - /accept <host id>
-                        - /decline <host id>
-                        ` : ""}
-                    `.replace(/^\s+/gm, "") /* <-- убираем пробелы в начале каждой строки (флаг m) */
-                );
-            },
-            newhost: async () => {
-                if (ctx.usersDataFromDb!.host) {
-                    await ctx.send(`❌ Вы уже владете одним хостом, больше нельзя. См. /help для упр. хостом`);
-                    return;
-                }
+                    for (let [componentName, questionData] of Object.entries(components)) {
+                        const { text: answer } = await ctx.question(questionData.question);
+                        if (!answer) throw new TypeError("Empty response from user");
+                        const { maxLength: expectedLength } = questionData,
+                            usersLength = answer.length;
+                        if (usersLength > expectedLength) throw new UserInputTooLarge(expectedLength, usersLength, componentName);
+                        newHostData.set(componentName as ComponentName, answer);
+                    }
 
-                const PEN_SMILE = `✏️`;
-                const LINK_SMILE = `🔗`;
-
-                const components = {
-                    name: {
-                        maxLength: 25,
-                        question: `${PEN_SMILE} Как назовем хост? - введите /stop для выхода`
-                    },
-                    site: {
-                        maxLength: 50,
-                        question: `${LINK_SMILE} Дай ссылку на сайт этого хоста`
-                    },
-                    description: (() => {
-                        const maxLength = 350;
+                    try {
+                        ctx.usersDataFromDb.host = await prisma.host.create({
+                            data: {
+                                ownerUserId: senderId.toString(),
+                                //why fromEntries
+                                ...Object.fromEntries(newHostData) as any
+                            }
+                        });
+                        await ctx.send(`✅ Мы успешно добавили хост!`);
+                    } catch (err) {
+                        console.error(err);
+                        await ctx.send(`❌ Наш полный провал. Мы не смогли занести хост в базу данных. Сообщите нам об этом.`);
+                    }
+                },
+                isAvailable: async () => {
+                    if (ctx.usersDataFromDb.host) {
                         return {
-                            maxLength,
-                            question: `${PEN_SMILE} Теперь давай описание, только поподробней ;) - макс ${maxLength} символов`
+                            available: false,
+                            reason: `Вы уже владете одним хостом, больше нельзя. См. /help для упр. хостом.`
                         };
-                    })()
-                };
-                type ComponentName = keyof typeof components;
+                    }
 
-                const newHostData = new Map<ComponentName, string>();
+                    if (await getHostMember()) {
+                        return {
+                            available: false,
+                            reason: `Нельзя создать свой хост, когда вы являетесь участником другого.`
+                        };
+                    }
 
-                for (let [componentName, questionData] of Object.entries(components)) {
-                    const { text: answer } = await ctx.question(questionData.question);
-                    if (!answer) throw new TypeError("Empty response from user");
-                    const { maxLength: expectedLength } = questionData,
-                        usersLength = answer.length;
-                    if (usersLength > expectedLength) throw new UserInputTooLarge(expectedLength, usersLength, componentName);
-                    newHostData.set(componentName as ComponentName, answer);
-                }
-
-                try {
-                    ctx.usersDataFromDb.host = await prisma.host.create({
-                        data: {
-                            ownerUserId: senderId.toString(),
-                            //why fromEntries
-                            ...Object.fromEntries(newHostData) as any
+                    return {
+                        available: true
+                    };
+                },
+                usage: "создать хост"
+            },
+            edithost: {
+                execute: async () => { },
+                isAvailable: async () => {
+                    if (ctx.usersDataFromDb.host || ctx.usersDataFromDb.hostMember) {
+                        return {
+                            available: true
+                        };
+                    } else {
+                        return {
+                            available: false,
+                            reason: `Вы не являетесь ни участником хоста, ни его владельцем.`
+                        };
+                    }
+                },
+                usage: "ред. данные хоста"
+            },
+            deletehost: {
+                execute: async () => {
+                    const usersHost = (await prisma.host.findOne({
+                        where: {
+                            ownerUserId: senderId.toString()
+                        },
+                        include: {
+                            members: true,
+                            userRatings: true
                         }
-                    });
-                    await ctx.send(`✅ Мы успешно добавили хост!`);
-                } catch (err) {
-                    console.error(err);
-                    await ctx.send(`❌ Наш полный провал. Мы не смогли занести хост в базу данных. Сообщите нам об этом.`);
-                }
-            },
-            deletehost: async () => {
-                const usersHost = await prisma.host.findOne({
-                    where: {
-                        ownerUserId: senderId.toString()
-                    },
-                    include: {
-                        members: true,
-                        userRatings: true
+                    }))!;
+                    //если у хоста нет участников, нету рейтингов и с момента создания прошло не более суток то запрашивать доп. разрешение не нужно
+                    if (Date.now() - +usersHost.createdAt / 1000 / 60 / 60 / 24 < 1 && usersHost.members.length === 0 && usersHost.userRatings.length === 0) {
+                        await dangerousDeleteHost();
+                        await ctx.send(`✅ Хост удален. Будем рады услышать ваше мнение о проекте: ${"github.com/zardoy/api-rate-host"}`);
+                        return;
                     }
-                });
-                if (!usersHost) {
-                    await ctx.send(`❌ Вы не создавали хост. Удалять нечего.`);
-                    return;
-                }
-                //если у хоста нет участников, нету рейтингов и с момента создания прошло не более суток то запрашивать доп. разрешение не нужно
-                if (Date.now() - +usersHost.createdAt / 1000 / 60 / 60 / 24 < 1 && usersHost.members.length === 0 && usersHost.userRatings.length === 0) {
-                    await dangerousDeleteHost();
-                    await ctx.send(`✅ Хост удален. Будем рады услышать ваше мнение о проекте: ${"github.com/zardoy/api-rate-host"}`);
-                    return;
-                }
-                const removeConfirm = usersHost.name.slice(0, 15);
-                const { text: answerConfirm } = await ctx.question(`Назад пути нет! Введите "${removeConfirm}" (без кавычек) для безвозвратного удаления хоста.`);
-                if (answerConfirm === removeConfirm) {
-                    await dangerousDeleteHost();
-                    await ctx.send(`✅ Хост удален! Спасибо, что были с нами!`);
-                } else {
-                    await ctx.send(`Сори, но вы ввели не в точности так, как мы вас просили. ${userCommandInLowerCase} для повтора`);
-                }
-            },
-            invite: async () => {
-                const usersToInvite = commandParts.slice(1);
-                if (usersToInvite.length > 5) {
-                    await ctx.send(`❌ Нельзя пригласить более 5 пользователей`);
-                    return;
-                }
-                await ctx.send("Not implemented yet");
-            },
-            invites: async () => {
-                const userInvitesFromHost = await prisma.userInvite.findMany({
-                    where: {
-                        toUserId: undefined
-                    },
-                    include: {
-                        Host: true
+                    const removeConfirm = usersHost.name.slice(0, 15);
+                    const { text: answerConfirm } = await ctx.question(`Назад пути нет! Введите "${removeConfirm}" (без кавычек) для безвозвратного удаления хоста.`);
+                    if (answerConfirm === removeConfirm) {
+                        await dangerousDeleteHost();
+                        await ctx.send(`✅ Хост удален! Спасибо, что были с нами!`);
+                    } else {
+                        await ctx.send(`Сори, но вы ввели не в точности так, как мы вас просили. ${userCommandInLowerCase} для повтора`);
                     }
-                });
-                if (userInvitesFromHost.length === 0) {
-                    await ctx.send(`Ту! У вас еще нет приглашений!`);
-                    return;
-                }
-                const invitesToPrint = userInvitesFromHost.map(inviteWithHost => `${inviteWithHost.fromHostId} ${inviteWithHost.Host.name}`);
-                await vk.api.messages.send({
-                    message: "",
-                    template: "",
-                });
-                await ctx.send(`
-                    Всего приглашений: ${userInvitesFromHost.length}
-                    (на каждой строчке – id приглашения и назв. хоста, исп. id в /accept и /decline, к примеру /accept 53248)
-                    ${invitesToPrint.join("\n")}
-                `.replace(/^\s+/gm, ""));
-            },
-            accept: async () => {
-                const hostId = commandParts[1];
-                if (!hostId) {
-                    await ctx.send(`❌ Укажите число в начале строки из списка /invites . К примеру: /${userCommandInLowerCase} 4359`);
-                    return;
-                }
-                if (isNaN(+hostId)) {
-                    await ctx.send(`❌ Вы ввели не id, а что-то другое (а нужно число!)`);
-                    return;
-                }
-                const dedicatedInvite = await prisma.userInvite.findOne({
-                    where: {
-                        toUserId_fromHostId: {
-                            toUserId: senderId.toString(),
-                            fromHostId: +hostId
-                        }
+                },
+                isAvailable: async () => {
+                    if (!ctx.usersDataFromDb.host) {
+                        return {
+                            available: false,
+                            reason: `Вы не создавали хост. Удалять нечего.`
+                        };
+                    } else {
+                        return {
+                            available: true
+                        };
                     }
-                });
-                if (!dedicatedInvite) {
-                    await ctx.send(`❌ Мы не смогли отыскать это приглашение :(`);
-                    return;
-                }
-                await prisma.userInvite.delete({
-                    where: {
-                        toUserId_fromHostId: {
-                            fromHostId: +hostId,
-                            toUserId: senderId.toString()
-                        }
-                    }
-                });
-                if (!isFromDeclineCommand) {
-                    //todo transaction
-                    await prisma.hostMember.create({
-                        data: {
-                            host: { connect: { id: +hostId } },
-                            userId: senderId.toString()
-                        }
-                    });
-                }
-                ctx.usersDataFromDb.invitesCount = await prisma.userInvite.count({
-                    where: {
-                        toUserId: senderId.toString()
-                    }
-                });
-            },
-            decline: async () => {
-                isFromDeclineCommand = true;
-                await commands.accept();
+                },
+                usage: "удалить хост"
             }
         };
+
+        if (userCommandInLowerCase === "help") {
+            const allArgProvided = commandParts[1] === "all";
+            const commandToDisplay = await Object.entries(commands)
+                .reduce(async (prevPromise, [commandName, { isAvailable, usage }]) => {
+                    const commandsArr = await prevPromise;
+                    if (
+                        (await isAvailable()).available
+                    ) {
+                        commandsArr.push(`- /${commandName.toLowerCase()} - ${usage}`);
+                    }
+                    return commandsArr;
+                }, Promise.resolve([] as string[]));
+
+            await ctx.send(`
+                        ${allArgProvided ? `Все` : `Доступные`} действия:
+                        - /help - ${!allArgProvided ? "эта справка" : "cправка с доступными коммандами"}
+                        - /help all - ${allArgProvided ? "эта справка" : "cправка со всеми коммандами"}
+                        ------
+                        ${commandToDisplay.join("\n")}
+                    `.replace(/^\s+/gm, "").replace(/-{3,}/g, "") /* <-- убираем пробелы в начале каждой строки (флаг m) */
+            );
+            return;
+        }
+
         const commandNameToExecute =
             Object.keys(commands).find((commandName) => commandName.toLowerCase() === userCommandInLowerCase);
 
@@ -375,9 +332,15 @@ on.start(async () => {
             await ctx.send(`/help тебе в помощь`);
             return;
         }
+        const selectedCommand = commands[commandNameToExecute];
 
         try {
-            await commands[commandNameToExecute]();
+            const result = await selectedCommand.isAvailable();
+            if (result.available === false) {
+                await ctx.send(`❌ ${result.reason}`);
+            } else {
+                await selectedCommand.execute();
+            }
         } catch (err) {
             await ctx.send(`❌ Не вышло исполнить /${commandNameToExecute} :(`);
             console.error(err);
