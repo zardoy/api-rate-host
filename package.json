@@ -43,7 +43,7 @@
         "dev": "cross-env DEBUG=vk-io:*,vk-bot nexus dev",
         "test": "jest",
         "test-watch": "jest --watch",
-        "postinstall": "npx prisma generate",
+        "postinstall": "yarn prisma generate",
         "reset-database": "ts-node ./tests/initDB.ts",
         "introspect-db": "ts-node ./tasks/introspect.ts",
         "local-postgres": "docker run --name postgres --rm --publish 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:10.12"
