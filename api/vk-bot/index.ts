@@ -6,6 +6,7 @@ import { VK, Keyboard, MessageContext } from "vk-io";
 import { QuestionManager, IQuestionMessageContext } from "vk-io-question";
 import _ from "lodash";
 import Debug from "@prisma/debug";
+import isURL from "is-url";
 
 
 class UserInputTooLarge extends TypeError {
@@ -95,7 +96,7 @@ on.start(async () => {
 
         const { senderId } = ctx;
         if (!ctx.text) {
-            await ctx.send(`Я не вижу текста. Повтори-ка.`, {
+            await ctx.send(`Я не вижу текста. Я тя не понимаю.`, {
                 keyboard: undefined
             });
             return;
@@ -170,7 +171,8 @@ on.start(async () => {
         const commands: Record<string, {
             execute: () => Promise<void>;
             isAvailable: () => Promise<{ available: true; } | { available: false, reason: string; }>;
-            usage: string;
+            description: string;
+            usage?: (allArg: boolean) => Promise<string>;
         }> = {
             newhost: {
                 execute: async () => {
@@ -201,6 +203,12 @@ on.start(async () => {
                     for (let [componentName, questionData] of Object.entries(components)) {
                         const { text: answer } = await ctx.question(questionData.question);
                         if (!answer) throw new TypeError("Empty response from user");
+                        // todo site check
+                        // if (componentName === "site") {
+                        //     if (!isURL(/^https?:\/\//i.test(answer) ? `https://` : `` + answer)) {
+
+                        //     }
+                        // }
                         const { maxLength: expectedLength } = questionData,
                             usersLength = answer.length;
                         if (usersLength > expectedLength) throw new UserInputTooLarge(expectedLength, usersLength, componentName);
@@ -240,11 +248,39 @@ on.start(async () => {
                         available: true
                     };
                 },
-                usage: "создать хост"
+                description: "создать хост"
             },
             edithost: {
-                execute: async () => { },
-                isAvailable: async () => {
+                async execute() {
+                    const componentArg = (commandParts[1] || "").toLowerCase();
+                    const newValue = commandParts[2];
+                    if (!componentArg) {
+                        await ctx.send(`Введите компонент для редактирования.`);
+                        return;
+                    }
+                    if (!newValue) {
+                        await ctx.send(`Введите новое значение для ${componentArg}`);
+                        return;
+                    }
+                    if (!["description", "name", "site"].includes(componentArg)) {
+                        await ctx.send(`Не верный компонент ${componentArg}`);
+                        return;
+                    }
+                    if (componentArg !== "description" && ctx.usersDataFromDb.host) {
+                        await ctx.send(`Вы, как участник хоста можете редактировать только описание (description)`);
+                        return;
+                    }
+                    await prisma.host.update({
+                        where: {
+                            id: (ctx.usersDataFromDb.host || { id: null }).id || ctx.usersDataFromDb.hostMember!.hostId
+                        },
+                        data: {
+                            [componentArg]: newValue
+                        }
+                    });
+                    await ctx.send(`Новая информация уже в базе данных.`);
+                },
+                async isAvailable() {
                     if (ctx.usersDataFromDb.host || ctx.usersDataFromDb.hostMember) {
                         return {
                             available: true
@@ -256,7 +292,11 @@ on.start(async () => {
                         };
                     }
                 },
-                usage: "ред. данные хоста"
+                description: "ред. данные хоста",
+                async usage(allArg) {
+                    return allArg || ctx.usersDataFromDb.host ? `<description | title | site>` :
+                        ctx.usersDataFromDb.hostMember ? `description` : ``;
+                }
             },
             deletehost: {
                 execute: async () => {
@@ -269,7 +309,7 @@ on.start(async () => {
                             userRatings: true
                         }
                     }))!;
-                    //если у хоста нет участников, нету рейтингов и с момента создания прошло не более суток то запрашивать доп. разрешение не нужно
+                    // если у хоста нет участников, нету рейтингов и с момента создания прошло не более суток то запрашивать доп. разрешение не нужно
                     if (Date.now() - +usersHost.createdAt / 1000 / 60 / 60 / 24 < 1 && usersHost.members.length === 0 && usersHost.userRatings.length === 0) {
                         await dangerousDeleteHost();
                         await ctx.send(`✅ Хост удален. Будем рады услышать ваше мнение о проекте: ${"github.com/zardoy/api-rate-host"}`);
@@ -296,17 +336,18 @@ on.start(async () => {
                         };
                     }
                 },
-                usage: "удалить хост"
+                description: "удалить хост"
             }
         };
 
         if (userCommandInLowerCase === "help") {
             const allArgProvided = commandParts[1] === "all";
+            // todo rewrite with for
             const commandToDisplay = await Object.entries(commands)
-                .reduce(async (prevPromise, [commandName, { isAvailable, usage }]) => {
+                .reduce(async (prevPromise, [commandName, { isAvailable, description: usage }]) => {
                     const commandsArr = await prevPromise;
                     if (
-                        (await isAvailable()).available
+                        allArgProvided || (await isAvailable()).available
                     ) {
                         commandsArr.push(`- /${commandName.toLowerCase()} - ${usage}`);
                     }
