@@ -10,7 +10,9 @@
 
         `DATABASE_URL=`<адресс к бд - локалька: `"postgresql://postgres:postgres@localhost:5432/ratehost"`>
         `VK_SECRET_KEY=`<защищенный ключ приложения, нужен для проверки подписи>
-2. `yarn start` - у вас должен быть установлен [yarn](https://yarnpkg.com/getting-started/install#global-install).
+2. `yarn start` - у вас должен быть установлен [yarn](https://yarnpkg.com/getting-started/install#global-install) и понятное дело nodeJS.
+
+3. Необходимо завести локальную БД postgres для тестирования. Это можно сделать запуском NPM скрипта `yarn local-postgres`. Однако, необходимо что бы **Docker** был установлен и **запущен**.
 
 ## Scripts
 
