@@ -14,9 +14,8 @@ dotenv.config({
 settings.change({
     schema: {
         nullable: {
-            //todo
-            // inputs: false,
-            // outputs: false
+            inputs: false,
+            outputs: false
         }
     }
 });

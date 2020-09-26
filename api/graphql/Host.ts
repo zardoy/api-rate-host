@@ -9,11 +9,10 @@ schema.extendType({
         t.field("hosts", {
             //todo: return whether should update rating
             type: "HostsCustomPagination",
-            nullable: false,
             args: {
-                offset: schema.intArg({ nullable: false }),
-                first: schema.intArg({ nullable: false, description: "ZERO based" }),
-                searchQuery: schema.stringArg()
+                offset: schema.intArg(),
+                first: schema.intArg({ description: "ZERO based" }),
+                searchQuery: schema.stringArg({ required: false })
             },
             async resolve(_root, { first, offset, searchQuery }, { db: prisma }) {
                 const result =
@@ -47,9 +46,8 @@ schema.extendType({
         });
         t.field("hostDetails", {
             type: "HostDetails",
-            nullable: false,
             args: {
-                id: schema.intArg({ required: true })
+                id: schema.intArg()
             },
             async resolve(_root, { id: hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth.");
@@ -90,7 +88,7 @@ schema.extendType({
             type: "String",
             description: "For advanced use.",
             args: {
-                id: schema.intArg({ required: true })
+                id: schema.intArg()
             },
             async resolve(_root, { id: hostId }, { db: prisma }) {
                 let host = await prisma.host.findOne({
@@ -113,8 +111,8 @@ schema.objectType({
             .name()
             .description()
             .site();
-        t.float("rating", { nullable: false });
-        t.int("votesCount", { nullable: false });
+        t.float("rating");
+        t.int("votesCount");
     }
 });
 
@@ -145,8 +143,7 @@ schema.objectType({
         //todo wrong pagination schema (everwhere)
         t.field("edges", {
             type: "HostList",
-            list: true,
-            nullable: false
+            list: true
         });
     }
 });

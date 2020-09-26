@@ -9,11 +9,11 @@ schema.extendType({
     definition(t) {
         t.field("createOrUpdateRating", {
             type: "UserRatingId",
-            nullable: false,
             args: {
-                hostId: schema.intArg({ required: true }),
-                generalRating: schema.intArg({ description: "All ratings must be in range 1-10 inclusive" }),
-                componentRatings: schema.arg({ type: "ComponentRatings" })
+                // todo use only one of args
+                hostId: schema.intArg(),
+                generalRating: schema.intArg({ description: "All input ratings must be in range 1-10 inclusive", required: false }),
+                componentRatings: schema.arg({ type: "ComponentRatings", required: false })
             },
             async resolve(_root, { hostId, generalRating, componentRatings }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
@@ -60,9 +60,8 @@ schema.extendType({
         t.field("deleteRating", {
             type: "Boolean",
             description: "User must be notified that this action also drops his review",
-            nullable: false,
             args: {
-                hostId: schema.intArg({ required: true })
+                hostId: schema.intArg()
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");

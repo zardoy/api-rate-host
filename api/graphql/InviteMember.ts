@@ -7,7 +7,7 @@ schema.extendType({
         t.field("getInviteKey", {
             type: "String",
             args: {
-                userIdToInvite: schema.stringArg({ required: true })
+                userIdToInvite: schema.stringArg()
             },
             async resolve(_root, { userIdToInvite }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth.");
@@ -50,7 +50,7 @@ schema.extendType({
         t.field("applyInviteKey", {
             type: "Boolean",
             args: {
-                inviteKey: schema.stringArg({ required: true })
+                inviteKey: schema.stringArg()
             },
             async resolve(_root, { inviteKey }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth.");

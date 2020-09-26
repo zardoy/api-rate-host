@@ -7,7 +7,6 @@ schema.extendType({
         t.field("hostMembers", {
             type: "String",
             list: true,
-            nullable: false,
             description: "List of user ids. Only for HOST_OWNER role!",
             async resolve(_root, _args, { vk_params, db: prisma }) {
                 const hostOwner = await getHostOwner(prisma, vk_params.user_id);
@@ -36,7 +35,7 @@ schema.extendType({
             //todo void response type
             type: "Boolean",
             args: {
-                userId: schema.stringArg({ required: true })
+                userId: schema.stringArg()
             },
             async resolve(_root, { userId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new TypeError("no vk_params");

@@ -9,7 +9,7 @@ schema.extendType({
         t.field("reviewsTotalCount", {
             type: "Int",
             args: {
-                hostId: schema.intArg({ required: true })
+                hostId: schema.intArg()
             },
             async resolve(_root, { hostId }, { db: prisma }) {
                 return await prisma.userReview.count({
@@ -23,11 +23,10 @@ schema.extendType({
         });
         t.field("reviews", {
             type: "ReviewsCustomPagination",
-            nullable: false,
             args: {
-                hostId: schema.intArg({ required: true }),
-                offset: schema.intArg({ required: true }),
-                first: schema.intArg({ required: true }),
+                hostId: schema.intArg(),
+                offset: schema.intArg(),
+                first: schema.intArg(),
                 // searchQuery: schema.stringArg(),
             },
             async resolve(_root, { first, offset, /* searchQuery, */ hostId }, { db: prisma, vk_params }) {
@@ -82,10 +81,9 @@ schema.extendType({
     definition(t) {
         t.field("createOrUpdateReview", {
             type: "Boolean",
-            nullable: false,
             args: {
-                hostId: schema.intArg({ required: true }),
-                text: schema.stringArg({ required: true }),
+                hostId: schema.intArg(),
+                text: schema.stringArg(),
             },
             async resolve(_root, { hostId, text }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not auth");
@@ -116,9 +114,8 @@ schema.extendType({
         });
         t.field("deleteReview", {
             type: "Boolean",
-            nullable: false,
             args: {
-                hostId: schema.intArg({ required: true }),
+                hostId: schema.intArg(),
             },
             async resolve(_root, { hostId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
@@ -140,9 +137,7 @@ schema.extendType({
 schema.objectType({
     name: "UserReview1",
     definition(t) {
-        t.int("reviewId", {
-            nullable: false
-        });
+        t.int("reviewId");
         t.model("UserReview").text()
             .createdAt()
             .updatedAt();
@@ -150,7 +145,6 @@ schema.objectType({
             nullable: true
         });
         t.float("generalRating", {
-            nullable: false,
             async resolve({ reviewId: ratingId }, _args, { db: prisma }) {
                 return (await prisma.userRating.findOne({
                     where: { ratingId },
@@ -163,7 +157,6 @@ schema.objectType({
             nullable: true
         });
         t.int("commentsCount", {
-            nullable: false,
             resolve: async ({ reviewId: ratingId }, _args, { db: prisma }) => await prisma.userComment.count({ where: { ratingId } })
         });
     }
@@ -183,16 +176,13 @@ schema.objectType({
         t.field("edges", {
             //todo 1
             type: "UserReview1",
-            list: true,
-            nullable: false
+            list: true
         });
         // t.field("hasNext", {
-        //     type: "Boolean",
-        //     nullable: false
+        //     type: "Boolean"
         // });
         // t.field("totalCount", {
-        //     type: "Int",
-        //     nullable: false
+        //     type: "Int"
         // });
     }
 });

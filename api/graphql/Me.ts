@@ -46,7 +46,7 @@ schema.extendType({
 schema.objectType({
     name: "Me",
     definition(t) {
-        t.field("role", { type: "UserRole", nullable: false });
+        t.field("role", { type: "UserRole" });
         t.field("hostId", { type: "Int", nullable: true, description: "Which host user belongs to. NULL if the role is USER" });
         t.field("membersCount", { type: "Int", nullable: true, description: "NULL if user is not host owner" });
     }

@@ -9,9 +9,9 @@ schema.extendType({
         t.field("comments", {
             type: "UserCommentsCustomPagination",
             args: {
-                reviewId: schema.intArg({ required: true }),
-                offset: schema.intArg({ required: true }),
-                first: schema.intArg({ required: true }),
+                reviewId: schema.intArg(),
+                offset: schema.intArg(),
+                first: schema.intArg(),
                 searchQuery: schema.stringArg({ required: false }),
             },
             async resolve(_root, { offset, first, searchQuery, reviewId: ratingId }, { db: prisma, vk_params }) {
@@ -65,10 +65,9 @@ schema.extendType({
     definition(t) {
         t.field("createComment", {
             type: "UserComment",
-            nullable: false,
             args: {
-                reviewId: schema.intArg({ required: true }),
-                text: schema.stringArg({ required: true }),
+                reviewId: schema.intArg(),
+                text: schema.stringArg(),
                 responseToCommentId: schema.intArg({ required: false }),
             },
             async resolve(_root, { responseToCommentId, text, reviewId: ratingId }, { db: prisma, vk_params }) {
@@ -83,18 +82,17 @@ schema.extendType({
                         },
                         userId,
                         text,
-                        toCommentId: responseToCommentId
+                        toCommentId: responseToCommentId === null ? undefined : responseToCommentId
                     }
                 });
             }
         });
         t.field("updateComment", {
             type: "Boolean",
-            nullable: false,
             args: {
-                commentId: schema.intArg({ required: true }),
+                commentId: schema.intArg(),
                 //todo: use diff in the future
-                text: schema.stringArg({ required: true })
+                text: schema.stringArg()
             },
             async resolve(_root, { commentId, text }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
@@ -111,7 +109,7 @@ schema.extendType({
         t.field("deleteComment", {
             type: "Boolean",
             args: {
-                commentId: schema.intArg({ required: true })
+                commentId: schema.intArg()
             },
             async resolve(_root, { commentId }, { db: prisma, vk_params }) {
                 if (!vk_params) throw new Error("Not authorized");
@@ -133,9 +131,9 @@ schema.extendType({
 schema.objectType({
     name: "UserData",
     definition(t) {
-        t.field("fullName", { type: "String", nullable: false });
-        t.field("id", { type: "String", nullable: false });
-        t.field("isFromHoster", { type: "Boolean", nullable: false });
+        t.field("fullName", { type: "String" });
+        t.field("id", { type: "String" });
+        t.field("isFromHoster", { type: "Boolean" });
     }
 });
 
@@ -154,12 +152,10 @@ schema.objectType({
         // });
         t.field("toCommentId", {
             type: "Int",
-            nullable: false,
             resolve: () => -1
         });
         t.field("author", {
             type: "UserData",
-            nullable: false,
             resolve(comment, _args, _ctx) {
                 return {
                     id: comment.userId,
@@ -180,8 +176,7 @@ schema.objectType({
     definition(t) {
         t.field("edges", {
             type: "UserComment",
-            list: true,
-            nullable: false
+            list: true
         });
     }
 });

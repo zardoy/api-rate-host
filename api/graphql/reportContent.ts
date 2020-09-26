@@ -9,7 +9,7 @@ schema.extendType({
             type: "Boolean",
             args: {
                 contentType: schema.arg({ type: "ReportContentType", required: true }),
-                contentId: schema.intArg({ required: true }),
+                contentId: schema.intArg(),
             },
             async resolve(_root, { }, { vk_params }) {
                 if (!vk_params) throw new Error("No auth.");
