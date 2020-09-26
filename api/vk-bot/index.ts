@@ -112,7 +112,7 @@ on.start(async () => {
 
     vk.updates.on("message_new", questionManager.middleware);
     vk.updates.on("message_new", async (ctx: MyMessageContext, next) => {
-        // переопределение .question, обязательно после его middleware (после того как он его назначает)
+        // переопределение .question, обязательно после его middleware (после того как он его определяет)
 
         const oldQuestion = ctx.question.bind(ctx);
         ctx.question = async (text, params?) => {
