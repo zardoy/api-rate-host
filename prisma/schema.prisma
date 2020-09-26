@@ -8,99 +8,91 @@ datasource db {
 }
 
 model Host {
-  createdAt   DateTime @default(dbgenerated())
+  id          Int          @default(autoincrement()) @id
   description String
-  id          Int      @default(autoincrement()) @id
-  isSuspended Boolean? @default(false)
   name        String
-  ownerUserId String   @unique
+  ownerUserId String       @unique
   site        String
-
+  createdAt   DateTime     @default(now())
+  isSuspended Boolean      @default(false)
   members     HostMember[]
-  userRatings UserRating[]
   userInvite  UserInvite[]
+  userRatings UserRating[]
 }
 
 model HostMember {
-  hostId Int
   userId String @id
-
-  host Host @relation(fields: [hostId], references: [id])
+  hostId Int
+  host   Host   @relation(fields: [hostId], references: [id])
 }
 
 model UserInvite {
-  fromHostId Int
   toUserId   String
+  fromHostId Int
   host       Host   @relation(fields: [fromHostId], references: [id])
 
   @@id([toUserId, fromHostId])
 }
 
 model HosterResponse {
-  commentId Int
-  ratingId  Int @id
-
+  ratingId    Int         @id
+  commentId   Int
   userComment UserComment @relation(fields: [commentId], references: [commentId])
 }
 
 model UserComment {
-  commentId   Int       @default(autoincrement()) @id
-  createdAt   DateTime  @default(now())
-  karma       Int       @default(0)
-  ratingId    Int
-  text        String
-  toCommentId Int?
-  updatedAt   DateTime? @updatedAt
-  userId      String
-
+  commentId       Int               @default(autoincrement()) @id
+  ratingId        Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime?         @updatedAt
+  text            String
+  toCommentId     Int?
+  userId          String
+  karma           Int               @default(0)
   dedicatedReview UserReview        @relation(fields: [ratingId], references: [ratingId])
   hosterResponses HosterResponse[]
   votes           UserCommentVote[]
 }
 
 model UserCommentVote {
-  commentId Int
-  userId    String
-  voteType  VoteType
-
+  commentId        Int
+  userId           String
+  voteType         VoteType
   dedicatedComment UserComment @relation(fields: [commentId], references: [commentId])
 
   @@id([commentId, userId])
 }
 
 model UserRating {
-  billing  Float?
-  cpu      Float?
-  general  Float
-  hostId   Int
-  ram      Float?
-  ratingId Int    @default(autoincrement()) @id
-  support  Float?
-  userId   String
-
+  ratingId      Int          @default(autoincrement()) @id
+  hostId        Int
+  userId        String
+  general       Float
+  billing       Float?
+  cpu           Float?
+  ram           Float?
+  support       Float?
   dedicatedHost Host         @relation(fields: [hostId], references: [id])
   userReview    UserReview[]
 
-  @@unique([hostId, userId])
+  @@unique([hostId, userId], name: "UserRating_hostId_userId_key")
 }
 
 model UserReview {
-  ratingId  Int       @id
-  createdAt DateTime  @default(now())
-  karma     Int       @default(0)
-  text      String
-  updatedAt DateTime? @updatedAt
-
+  ratingId        Int              @id
+  text            String
+  karma           Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime?        @updatedAt
   userRating      UserRating       @relation(fields: [ratingId], references: [ratingId])
   userComments    UserComment[]
   userReviewVotes UserReviewVote[]
 }
 
 model UserReviewVote {
-  ratingId Int
-  userId   String
-  voteType VoteType
-
+  ratingId   Int
+  userId     String
+  voteType   VoteType
   userReview UserReview @relation(fields: [ratingId], references: [ratingId])
 
   @@id([ratingId, userId])

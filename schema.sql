@@ -8,7 +8,7 @@ CREATE TABLE "Host" (
     "ownerUserId" text NOT NULL UNIQUE,
     "site" text NOT NULL,
     "createdAt" date NOT NULL DEFAULT CURRENT_DATE,
-    "isSuspended" boolean DEFAULT FALSE
+    "isSuspended" boolean NOT NULL DEFAULT FALSE
 );
 CREATE TABLE "HostMember" (
     --check if already in "Host" as the owner
