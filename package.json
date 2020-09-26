@@ -49,7 +49,6 @@
         "test-watch": "jest --watch",
         "postinstall": "yarn prisma generate",
         "reset-database": "ts-node -T ./tests/reset-db/index.ts -P ./tests/reset-db/tsconfig.json",
-        "introspect-db": "ts-node ./tasks/introspect.ts",
         "local-postgres": "docker run --name postgres --rm --publish 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:10.12"
     }
 }
