@@ -2284,10 +2284,10 @@ debug@2.6.9, debug@^2.2.0, debug@^2.3.3:
   dependencies:
     ms "2.0.0"
 
-debug@4, debug@^4.1.0, debug@^4.1.1, debug@^4.2.0:
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/debug/-/debug-4.2.0.tgz#7f150f93920e94c58f5574c2fd01a3110effe7f1"
-  integrity sha512-IX2ncY78vDTjZMFUdmsvIRFY2Cf4FnD0wRs+nQwJU8Lu99/tPFdb0VybiiMTPe3I6rQmwsqQqRBvxU+bZ/I8sg==
+debug@4, debug@^4.1.0, debug@^4.1.1, debug@^4.3.1:
+  version "4.3.1"
+  resolved "https://registry.yarnpkg.com/debug/-/debug-4.3.1.tgz#f0d229c505e0c6d8c49ac553d1b13dc183f6b2ee"
+  integrity sha512-doEwdvm4PCeK4K3RQN2ZC2BYUBaxwLARCqZmMjtF8a51J2Rb0xpVloFRnCODwqjpwnAoao4pelN8l3RJdv3gRQ==
   dependencies:
     ms "2.1.2"
 
@@ -6677,13 +6677,13 @@ vk-io-question@^2.0.1:
     middleware-io "^2.5.0"
     vk-io "^4.0.0-rc.30"
 
-vk-io@^4.0.0-rc.30, vk-io@^4.0.3:
-  version "4.0.3"
-  resolved "https://registry.yarnpkg.com/vk-io/-/vk-io-4.0.3.tgz#16cff47de00350342d344d32af2e24ff1be47f2b"
-  integrity sha512-JvocZvqcpueMitagkhHDC28aZnHA24BY3GPibvKNrzhW3thqcS6RDe4YjOz7FGTL9o/xcPdgXzmBujKdT6tdTg==
+vk-io@^4.0.0-rc.30, vk-io@^4.1.2:
+  version "4.1.2"
+  resolved "https://registry.yarnpkg.com/vk-io/-/vk-io-4.1.2.tgz#a25359b0af4a52ede0b1f3caaa4a64b158fcca84"
+  integrity sha512-hw/HtQeUlY8IQPfSR03i94QIFKcR1fLsWeWtyrpz6wp8zsQdLdEqrDfzPXgDJVyy183d+y9sjykwkPRkcTb+cg==
   dependencies:
     abort-controller "^3.0.0"
-    debug "^4.2.0"
+    debug "^4.3.1"
     form-data "^3.0.0"
     inspectable "^1.0.0"
     middleware-io "^2.5.0"
